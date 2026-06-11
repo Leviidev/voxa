@@ -1,0 +1,31 @@
+Relevant log lines
+line 12 shows Netlify selected Node v22.22.3 (npm v10.9.8).
+line 19 the build begins installing npm packages.
+line 20–line 26 show the failure: "Failed during stage 'Install dependencies': dependency_installation script returned non-zero exit code" and an npm internal error "Exit handler never called!" with a debug log written at the path in line 24.
+Diagnosis
+
+Error type: npm install failure (npm internal error: "Exit handler never called!").
+Likely cause: an incompatibility between the Node / npm version used on Netlify (Node 22 + npm 10) and one of the repo's dependencies or install scripts. This class of error frequently appears when using a very new Node/npm runtime that some packages or postinstall scripts are not compatible with.
+Solution
+
+Verify package.json and lockfile are present and committed
+Confirm package.json (and package-lock.json / pnpm-lock.yaml / yarn.lock if used) is in the repo root and committed. For this repo, check: https://github.com/Leviidev/voxa/blob/main/package.json
+Pin a stable Node LTS for the build on Netlify
+The simplest fix is to force Netlify to use an LTS Node version (18 or 20) instead of Node 22. Add one of these to your repo root. Option A (.nvmrc) is most common; Option B is an alternative using netlify.toml.
+Option A — add .nvmrc (recommended)
+Create a file named .nvmrc in the project root containing the Node major version you want, for example:
+18
+Commit and push. Netlify will pick up .nvmrc and use Node 18 for the build.
+Option B — set NODE_VERSION in netlify.toml (alternative)
+If you already have netlify.toml, add or update the build environment NODE_VERSION:
+[build]
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+Commit and push.
+Redeploy and, if it still fails, inspect the npm debug log
+If the error persists, run npm install locally (using the same Node version you set on Netlify) to reproduce and inspect the npm debug log path shown in the build (line 24) for the exact stack trace and failing package or script.
+Netlify docs for changing Node versions
+If you need more detail about how Netlify chooses Node and other ways to set it, see Netlify docs: https://docs.netlify.com/configure-builds/manage-dependencies/#node-js-and-javascript
+If after pinning Node you still get the same npm internal error, run npm install locally with the pinned Node version, capture the full npm debug log, and share the failing package or postinstall script from that log so we can pinpoint the package causing the failure.
