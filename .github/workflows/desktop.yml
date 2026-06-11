@@ -1,0 +1,31 @@
+name: Build Desktop Apps (Windows / macOS / Linux)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'macos/**'
+      - 'linux/**'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Windows build pipeline — configure when Electron/Tauri project is added."
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "macOS build pipeline — configure when app project is added."
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Linux build pipeline — configure when Electron/Tauri project is added."
