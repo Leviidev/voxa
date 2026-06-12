@@ -109,10 +109,13 @@ export async function updateUser(userId, fields) {
   const values = []
   let idx = 1
 
+  const URL_FIELDS = new Set(['avatarUrl', 'bannerUrl'])
   for (const key of allowed) {
     if (!(key in fields)) continue
     if (key === 'status' && !validStatuses.includes(fields[key])) continue
-    const val = nullIfEmpty(fields[key] === '' ? null : sanitize(fields[key] ?? '', 200))
+    const maxLen = URL_FIELDS.has(key) ? 500_000 : 200
+    const raw = fields[key] ?? ''
+    const val = nullIfEmpty(raw === '' ? null : sanitize(raw, maxLen))
     setClauses.push(`${colMap[key]} = $${idx++}`)
     values.push(val)
   }
@@ -231,6 +234,7 @@ export async function getServerWithChannels(serverId, userId) {
     bannerColor: server.banner_color,
     ownerId: server.owner_id,
     createdAt: server.created_at,
+    isPublic: server.is_public ?? false,
     categories,
     members,
     roles: roles.map(r => ({

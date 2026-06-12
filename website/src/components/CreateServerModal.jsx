@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { X, Hash, Users, ArrowRight, Compass } from 'lucide-react'
+import { X, Hash, Users, ArrowRight, Compass, AlertCircle, Check } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useNavigate } from 'react-router-dom'
 import ServerDiscoveryModal from './ServerDiscoveryModal.jsx'
+import { api } from '../lib/api.js'
 
 export default function CreateServerModal({ onClose }) {
   const [step, setStep] = useState('choose')
   const [showDiscover, setShowDiscover] = useState(false)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
-  const { createServer } = useServers()
+  const [inviteInput, setInviteInput] = useState('')
+  const [joinError, setJoinError] = useState('')
+  const { createServer, refetch } = useServers()
   const navigate = useNavigate()
 
   if (showDiscover) return <ServerDiscoveryModal onClose={onClose} />
@@ -23,6 +26,29 @@ export default function CreateServerModal({ onClose }) {
       onClose()
       if (channelId) navigate(`/voxa/servers/${server.id}/channels/${channelId}`)
       else navigate(`/voxa/servers/${server.id}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleJoin = async (e) => {
+    e.preventDefault()
+    const raw = inviteInput.trim()
+    if (!raw) return
+    setJoinError('')
+    setLoading(true)
+    try {
+      // Extract the code from a full URL like https://voxa.lol/invite/ABC123 or just ABC123
+      const match = raw.match(/(?:\/invite\/|^)([A-Z0-9]{6,12})$/i)
+      const code = match ? match[1].toUpperCase() : raw.toUpperCase()
+      const server = await api.joinByInvite(code)
+      await refetch()
+      onClose()
+      const firstText = server?.categories?.flatMap(c => c.channels)?.find(c => c.type === 'text')
+      if (firstText) navigate(`/voxa/servers/${server.id}/channels/${firstText.id}`)
+      else navigate(`/voxa/servers/${server.id}`)
+    } catch (err) {
+      setJoinError(err.message || 'Invalid or expired invite link.')
     } finally {
       setLoading(false)
     }
@@ -115,20 +141,32 @@ export default function CreateServerModal({ onClose }) {
         )}
 
         {step === 'join' && (
-          <form onSubmit={e => { e.preventDefault(); onClose() }} className="p-8">
+          <form onSubmit={handleJoin} className="p-8">
             <button type="button" onClick={() => setStep('choose')}
               className="text-[#96989D] hover:text-[#5C6068] text-xs font-medium mb-5 flex items-center gap-1 transition-colors">
               ← Back
             </button>
             <h2 className="text-xl font-black text-[#1A1B1E] mb-1">Join a server</h2>
-            <p className="text-[#5C6068] text-sm mb-6">Paste an invite link below.</p>
-            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Invite link</label>
-            <input autoFocus placeholder="https://voxa.lol/invite/abc123"
-              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D] mb-6 transition-all"
+            <p className="text-[#5C6068] text-sm mb-6">Paste an invite link or code below.</p>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Invite link or code</label>
+            <input
+              autoFocus
+              value={inviteInput}
+              onChange={e => { setInviteInput(e.target.value); setJoinError('') }}
+              placeholder="https://voxa.lol/invite/ABC123  or  ABC123"
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D] mb-2 transition-all"
             />
-            <div className="flex items-center justify-between">
+            {joinError && (
+              <div className="flex items-center gap-2 text-[#E53935] text-xs mb-4">
+                <AlertCircle size={12} />{joinError}
+              </div>
+            )}
+            <div className="flex items-center justify-between mt-4">
               <button type="button" onClick={onClose} className="text-[#5C6068] hover:text-[#1A1B1E] text-sm font-medium transition-colors">Cancel</button>
-              <button type="submit" className="bg-[#E53935] hover:bg-[#C62828] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-colors">Join server</button>
+              <button type="submit" disabled={!inviteInput.trim() || loading}
+                className="flex items-center gap-2 bg-[#E53935] hover:bg-[#C62828] disabled:opacity-40 text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition-colors">
+                {loading ? 'Joining…' : <><Check size={14} /> Join server</>}
+              </button>
             </div>
           </form>
         )}
