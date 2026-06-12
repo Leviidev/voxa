@@ -37,11 +37,17 @@ export default function Login() {
     setLoading(false)
   }
 
+  const switchMode = () => {
+    setIsRegister(v => !v)
+    setError('')
+    setForm({ email: '', username: '', password: '' })
+  }
+
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-4 overflow-auto">
+    <div className="min-h-screen bg-[#F7F8FA] flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-[400px]">
-        <Link to="/" className="flex items-center gap-2 justify-center mb-8">
-          <div className="w-9 h-9 bg-[#E53935] rounded-xl flex items-center justify-center">
+        <Link to="/" className="flex items-center gap-2 justify-center mb-8 group">
+          <div className="w-9 h-9 bg-[#E53935] rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
             <span className="text-white font-black text-xl leading-none">v</span>
           </div>
           <span className="text-[#1A1B1E] font-black text-xl tracking-tight">voxa</span>
@@ -58,13 +64,13 @@ export default function Login() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
-              <AlertCircle size={15} className="shrink-0" />
-              {error}
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-4" noValidate>
             {isRegister && (
               <Field label="Username" name="username" value={form.username} onChange={handle} placeholder="cooluser" />
             )}
@@ -82,6 +88,7 @@ export default function Login() {
                   placeholder="••••••••"
                   autoComplete={isRegister ? 'new-password' : 'current-password'}
                   required
+                  minLength={6}
                   className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] pr-10 placeholder:text-[#96989D] transition-all"
                 />
                 <button type="button" onClick={() => setShowPw(v => !v)}
@@ -89,18 +96,26 @@ export default function Login() {
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {isRegister && (
+                <p className="text-[#96989D] text-xs mt-1.5">At least 6 characters.</p>
+              )}
             </div>
 
             {!isRegister && (
               <div className="text-right -mt-1">
-                <a href="#" className="text-[#E53935] hover:text-[#C62828] text-xs transition-colors">Forgot your password?</a>
+                <a href="mailto:voxa@voxa.lol" className="text-[#E53935] hover:text-[#C62828] text-xs transition-colors">
+                  Forgot your password?
+                </a>
               </div>
             )}
 
             <button type="submit" disabled={loading}
-              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2">
+              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2 shadow-sm hover:shadow-md active:scale-[0.99]">
               {loading
-                ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full spinner" /> Please wait…</span>
+                ? <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Please wait…
+                  </span>
                 : isRegister ? 'Create account' : 'Log in'
               }
             </button>
@@ -108,12 +123,19 @@ export default function Login() {
 
           <p className="text-[#96989D] text-xs mt-5 text-center">
             {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-            <button onClick={() => { setIsRegister(v => !v); setError('') }}
+            <button onClick={switchMode}
               className="text-[#E53935] hover:text-[#C62828] font-semibold transition-colors">
               {isRegister ? 'Log in' : 'Sign up free'}
             </button>
           </p>
         </div>
+
+        <p className="text-center text-[#C0C2C7] text-xs mt-5">
+          Need help?{' '}
+          <a href="mailto:voxa@voxa.lol" className="text-[#96989D] hover:text-[#5C6068] transition-colors">
+            voxa@voxa.lol
+          </a>
+        </p>
       </div>
     </div>
   )
@@ -123,7 +145,12 @@ function Field({ label, name, type = 'text', value, onChange, placeholder }) {
   return (
     <div>
       <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">{label}</label>
-      <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
         autoComplete={name === 'email' ? 'email' : name === 'username' ? 'username' : 'off'}
         required
         className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] transition-all"
