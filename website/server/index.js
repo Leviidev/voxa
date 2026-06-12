@@ -15,8 +15,12 @@ const PORT = process.env.API_PORT || 3001
 app.use(cors({
   origin: (origin, cb) => {
     const allowed = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean)
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ''
     const defaults = ['http://localhost:5000', 'http://localhost:5173', 'https://voxa.lol']
-    const ok = !origin || [...defaults, ...allowed].some(o => origin.startsWith(o))
+    if (replitDomain) defaults.push(replitDomain)
+    // Also allow any *.replit.dev or *.repl.co domains
+    const isReplitDomain = origin && (origin.endsWith('.replit.dev') || origin.endsWith('.repl.co'))
+    const ok = !origin || isReplitDomain || [...defaults, ...allowed].some(o => origin.startsWith(o))
     cb(ok ? null : new Error('CORS blocked'), ok)
   },
   credentials: true,
