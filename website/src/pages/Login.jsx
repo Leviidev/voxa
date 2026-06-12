@@ -6,11 +6,11 @@ import { useAuth } from '../context/AuthContext.jsx'
 export default function Login() {
   const [params] = useSearchParams()
   const [isRegister, setIsRegister] = useState(params.get('mode') === 'register')
-  const [form, setForm] = useState({ email: '', username: '', password: '', dob: '' })
+  const [form, setForm] = useState({ email: '', username: '', password: '' })
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login, user } = useAuth()
+  const { login, register, user } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -23,47 +23,42 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 700))
-    if (!form.email || !form.password) { setError('Please fill in all required fields.'); setLoading(false); return }
-    if (isRegister && !form.username) { setError('Choose a username.'); setLoading(false); return }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); setLoading(false); return }
-    const userData = {
-      id: 'u_' + Math.random().toString(36).slice(2),
-      username: form.username || form.email.split('@')[0],
-      email: form.email,
-      discriminator: String(Math.floor(1000 + Math.random() * 9000)),
-      avatar: null,
-      status: 'online',
-      createdAt: new Date().toISOString(),
+    try {
+      if (isRegister) {
+        if (!form.username) { setError('Choose a username.'); setLoading(false); return }
+        await register(form.email, form.username, form.password)
+      } else {
+        await login(form.email, form.password)
+      }
+      navigate('/voxa/me')
+    } catch (err) {
+      setError(err.message)
     }
-    login(userData)
-    navigate('/voxa/me')
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-voxa-bg flex items-center justify-center p-4 overflow-auto">
-      <div className="absolute inset-0 bg-gradient-to-br from-voxa-red/10 via-transparent to-transparent pointer-events-none" />
-      <div className="w-full max-w-md relative">
+    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-4 overflow-auto">
+      <div className="w-full max-w-[400px]">
         <Link to="/" className="flex items-center gap-2 justify-center mb-8">
-          <div className="w-9 h-9 bg-voxa-red rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-[#E53935] rounded-xl flex items-center justify-center">
             <span className="text-white font-black text-xl leading-none">v</span>
           </div>
-          <span className="text-voxa-header font-bold text-2xl">voxa</span>
+          <span className="text-[#1A1B1E] font-black text-xl tracking-tight">voxa</span>
         </Link>
 
-        <div className="bg-voxa-sidebar rounded-2xl p-8 shadow-2xl">
-          <div className="text-center mb-7">
-            <h1 className="text-2xl font-bold text-voxa-header mb-1">
-              {isRegister ? 'Create an account' : 'Welcome back!'}
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#E3E5E8]">
+          <div className="mb-6">
+            <h1 className="text-xl font-black text-[#1A1B1E] tracking-tight mb-1">
+              {isRegister ? 'Create your account' : 'Welcome back'}
             </h1>
-            <p className="text-voxa-text-muted text-sm">
-              {isRegister ? "Let's get you set up on Voxa." : "We're so excited to see you again!"}
+            <p className="text-[#96989D] text-sm">
+              {isRegister ? 'Join Voxa — it takes 30 seconds.' : 'Good to see you again.'}
             </p>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-900/30 border border-red-500/40 text-red-300 text-sm px-4 py-3 rounded-lg mb-5">
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
               <AlertCircle size={15} className="shrink-0" />
               {error}
             </div>
@@ -71,14 +66,12 @@ export default function Login() {
 
           <form onSubmit={submit} className="space-y-4">
             {isRegister && (
-              <Field label="Username" name="username" type="text" value={form.username}
-                onChange={handle} placeholder="cooluser123" required />
+              <Field label="Username" name="username" value={form.username} onChange={handle} placeholder="cooluser" />
             )}
-            <Field label="Email" name="email" type="email" value={form.email}
-              onChange={handle} placeholder="you@example.com" required />
+            <Field label="Email" name="email" type="email" value={form.email} onChange={handle} placeholder="you@example.com" />
             <div>
-              <label className="block text-voxa-header text-xs font-bold uppercase tracking-wider mb-1.5">
-                Password <span className="text-voxa-red">*</span>
+              <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">
+                Password
               </label>
               <div className="relative">
                 <input
@@ -87,71 +80,53 @@ export default function Login() {
                   value={form.password}
                   onChange={handle}
                   placeholder="••••••••"
-                  className="w-full bg-voxa-input text-voxa-header rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-voxa-red/50 pr-10 placeholder:text-voxa-text-dim"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
                   required
+                  className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] pr-10 placeholder:text-[#96989D] transition-all"
                 />
                 <button type="button" onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-voxa-text-muted hover:text-voxa-header">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#96989D] hover:text-[#5C6068] transition-colors">
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            {isRegister && (
-              <Field label="Date of Birth" name="dob" type="date" value={form.dob}
-                onChange={handle} required />
-            )}
-
             {!isRegister && (
-              <div className="text-right">
-                <a href="#" className="text-voxa-red hover:underline text-xs">Forgot your password?</a>
+              <div className="text-right -mt-1">
+                <a href="#" className="text-[#E53935] hover:text-[#C62828] text-xs transition-colors">Forgot your password?</a>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-voxa-red hover:bg-voxa-red-light disabled:opacity-60 text-white font-bold py-3 rounded-lg transition-all text-sm mt-1 hover:shadow-lg hover:shadow-voxa-red/30"
-            >
-              {loading ? 'Please wait…' : isRegister ? 'Continue' : 'Log In'}
+            <button type="submit" disabled={loading}
+              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2">
+              {loading
+                ? <span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full spinner" /> Please wait…</span>
+                : isRegister ? 'Create account' : 'Log in'
+              }
             </button>
           </form>
 
-          <p className="text-voxa-text-muted text-xs mt-5 text-center">
-            {isRegister ? 'Already have an account? ' : 'Need an account? '}
+          <p className="text-[#96989D] text-xs mt-5 text-center">
+            {isRegister ? 'Already have an account? ' : "Don't have an account? "}
             <button onClick={() => { setIsRegister(v => !v); setError('') }}
-              className="text-voxa-red hover:underline font-medium">
-              {isRegister ? 'Log in' : 'Register'}
+              className="text-[#E53935] hover:text-[#C62828] font-semibold transition-colors">
+              {isRegister ? 'Log in' : 'Sign up free'}
             </button>
           </p>
-
-          {isRegister && (
-            <p className="text-voxa-text-dim text-xs mt-4 text-center leading-relaxed">
-              By registering, you agree to Voxa's{' '}
-              <a href="#" className="text-voxa-red hover:underline">Terms of Service</a> and{' '}
-              <a href="#" className="text-voxa-red hover:underline">Privacy Policy</a>.
-            </p>
-          )}
         </div>
       </div>
     </div>
   )
 }
 
-function Field({ label, name, type, value, onChange, placeholder, required }) {
+function Field({ label, name, type = 'text', value, onChange, placeholder }) {
   return (
     <div>
-      <label className="block text-voxa-header text-xs font-bold uppercase tracking-wider mb-1.5">
-        {label} {required && <span className="text-voxa-red">*</span>}
-      </label>
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full bg-voxa-input text-voxa-header rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-voxa-red/50 placeholder:text-voxa-text-dim"
-        required={required}
+      <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">{label}</label>
+      <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
+        autoComplete={name === 'email' ? 'email' : name === 'username' ? 'username' : 'off'}
+        required
+        className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] transition-all"
       />
     </div>
   )

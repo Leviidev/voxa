@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight, Hash, Mic, Shield } from 'lucide-react'
 
 export default function Home() {
   return (
-    <div className="bg-[#0f0f10] text-[#e2e2e4] min-h-screen overflow-y-auto landing-scroll">
+    <div className="bg-white text-[#1A1B1E] min-h-screen overflow-y-auto landing-scroll">
       <Nav />
       <Hero />
-      <Preview />
-      <Why />
+      <AppPreview />
+      <Features />
+      <CTA />
       <Footer />
     </div>
   )
@@ -15,22 +16,20 @@ export default function Home() {
 
 function Nav() {
   return (
-    <nav className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+    <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
       <Link to="/" className="flex items-center gap-2">
-        <div className="w-7 h-7 bg-[#e03131] rounded-md flex items-center justify-center">
-          <span className="text-white font-black text-base leading-none">v</span>
+        <div className="w-7 h-7 bg-[#E53935] rounded-lg flex items-center justify-center">
+          <span className="text-white font-black text-sm leading-none">v</span>
         </div>
-        <span className="text-white font-semibold text-sm tracking-tight">voxa</span>
+        <span className="text-[#1A1B1E] font-bold text-sm tracking-tight">voxa</span>
       </Link>
-
-      <div className="flex items-center gap-6">
-        <a href="#" className="text-[#888] hover:text-white text-sm transition-colors hidden sm:block">Download</a>
-        <Link to="/login" className="text-[#888] hover:text-white text-sm transition-colors">Log in</Link>
-        <Link
-          to="/login?mode=register"
-          className="bg-[#e03131] hover:bg-[#c92a2a] text-white text-sm font-medium px-4 py-1.5 rounded-md transition-colors"
-        >
-          Sign up
+      <div className="flex items-center gap-2">
+        <Link to="/login" className="text-[#5C6068] hover:text-[#1A1B1E] text-sm font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-[#F2F3F5]">
+          Log in
+        </Link>
+        <Link to="/login?mode=register"
+          className="bg-[#E53935] hover:bg-[#C62828] text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors">
+          Get started
         </Link>
       </div>
     </nav>
@@ -39,30 +38,24 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="max-w-5xl mx-auto px-6 pt-20 pb-16">
+    <section className="max-w-6xl mx-auto px-6 pt-20 pb-12">
       <div className="max-w-2xl">
-        <div className="text-[#e03131] text-sm font-medium mb-4 tracking-wide uppercase">
-          Open beta
-        </div>
-        <h1 className="text-5xl font-bold text-white leading-tight tracking-tight mb-5">
-          Chat, call, hang out.<br />
-          No strings attached.
+        <p className="text-[#E53935] text-xs font-bold uppercase tracking-widest mb-5">Free · Open beta</p>
+        <h1 className="text-[56px] leading-[1.08] font-black tracking-tight text-[#1A1B1E] mb-6">
+          Talk somewhere<br />
+          <span className="text-[#E53935]">you actually like.</span>
         </h1>
-        <p className="text-[#888] text-lg leading-relaxed mb-8 max-w-lg">
-          Voxa is a free alternative to Discord. Create a server for your friends, your community, or your team — voice, video, and text all in one place.
+        <p className="text-[#5C6068] text-lg leading-relaxed mb-8 max-w-lg">
+          Voxa is group chat done right. Servers, channels, voice, and video — all free. No paid tiers, no locked features, no Nitro.
         </p>
         <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            to="/login?mode=register"
-            className="flex items-center gap-2 bg-[#e03131] hover:bg-[#c92a2a] text-white font-medium px-5 py-2.5 rounded-md transition-colors text-sm"
-          >
-            Get started free
+          <Link to="/login?mode=register"
+            className="inline-flex items-center gap-2 bg-[#E53935] hover:bg-[#C62828] text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
+            Open Voxa free
             <ArrowRight size={15} />
           </Link>
-          <Link
-            to="/login"
-            className="text-[#888] hover:text-white text-sm transition-colors px-4 py-2.5"
-          >
+          <Link to="/login"
+            className="text-[#5C6068] hover:text-[#1A1B1E] text-sm font-medium transition-colors px-4 py-3">
             Already have an account →
           </Link>
         </div>
@@ -71,92 +64,108 @@ function Hero() {
   )
 }
 
-function Preview() {
+function AppPreview() {
   return (
-    <section className="max-w-5xl mx-auto px-6 pb-20">
-      <div className="rounded-xl overflow-hidden border border-white/[0.07] bg-[#1a1a1c]">
+    <section className="max-w-6xl mx-auto px-6 pb-20">
+      <div className="rounded-2xl overflow-hidden border border-[#E3E5E8] shadow-xl shadow-black/5">
         {/* Fake titlebar */}
-        <div className="h-9 bg-[#141415] border-b border-white/[0.06] flex items-center px-4 gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+        <div className="h-10 bg-[#F2F3F5] border-b border-[#E3E5E8] flex items-center px-4 gap-2">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#FF5F57]" />
+            <div className="w-3 h-3 rounded-full bg-[#FEBC2E]" />
+            <div className="w-3 h-3 rounded-full bg-[#28C840]" />
+          </div>
           <div className="flex-1 flex justify-center">
-            <div className="bg-[#1e1e20] rounded px-8 py-0.5 text-[11px] text-[#555]">voxa.lol/voxa/servers/...</div>
+            <div className="bg-[#E3E5E8] rounded-md px-10 py-0.5 text-[11px] text-[#96989D]">voxa.lol/app</div>
           </div>
         </div>
 
-        {/* App mockup */}
-        <div className="flex h-80">
-          {/* Server icons */}
-          <div className="w-14 bg-[#111113] flex flex-col items-center py-3 gap-2 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-[#e03131] flex items-center justify-center">
-              <span className="text-white font-black text-sm">v</span>
-            </div>
-            <div className="w-6 h-px bg-white/10" />
-            {['G', 'M', 'A'].map((l, i) => (
-              <div key={i} className="w-9 h-9 rounded-full bg-[#1e1e20] flex items-center justify-center text-[#888] text-xs font-bold hover:rounded-xl transition-all cursor-pointer">
-                {l}
+        {/* App mockup — light theme */}
+        <div className="flex h-[340px] bg-white">
+          {/* Server list */}
+          <div className="w-[200px] bg-[#F2F3F5] border-r border-[#E3E5E8] flex flex-col shrink-0">
+            <div className="px-3 py-3 border-b border-[#E3E5E8]">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[#E53935] flex items-center justify-center">
+                  <span className="text-white font-black text-[10px]">v</span>
+                </div>
+                <span className="text-xs font-bold text-[#1A1B1E]">voxa</span>
               </div>
-            ))}
+            </div>
+            <div className="flex-1 py-2 px-2 space-y-0.5 overflow-hidden">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-[#96989D] px-2 pt-1 pb-1">Your servers</div>
+              {[
+                { name: 'Voxa HQ', color: '#E53935', active: true },
+                { name: 'Gaming Zone', color: '#6366F1', active: false },
+                { name: 'Study Group', color: '#10B981', active: false },
+              ].map(s => (
+                <div key={s.name}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer ${s.active ? 'bg-[#E0E2E6]' : 'hover:bg-[#EAEBEE]'}`}>
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                    style={{ background: s.color }}>
+                    {s.name[0]}
+                  </div>
+                  <span className={`text-[11px] font-medium truncate ${s.active ? 'text-[#1A1B1E]' : 'text-[#5C6068]'}`}>
+                    {s.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="px-2 pb-2">
+              <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#EAEBEE]">
+                <div className="w-5 h-5 rounded-full bg-[#E53935] flex items-center justify-center text-white text-[9px] font-bold shrink-0">Y</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-[#1A1B1E] truncate leading-none">you</div>
+                  <div className="text-[9px] text-[#96989D]">online</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Channels */}
-          <div className="w-44 bg-[#181819] border-r border-white/[0.05] flex flex-col shrink-0">
-            <div className="h-10 flex items-center px-3 border-b border-white/[0.05]">
-              <span className="text-white text-xs font-semibold truncate">Voxa HQ</span>
+          <div className="w-[160px] bg-[#F7F8FA] border-r border-[#E3E5E8] flex flex-col shrink-0">
+            <div className="h-9 flex items-center px-3 border-b border-[#E3E5E8]">
+              <span className="text-[#1A1B1E] text-[11px] font-bold truncate">Voxa HQ</span>
             </div>
-            <div className="flex-1 py-2 px-1 space-y-0.5">
-              <div className="text-[10px] text-[#555] uppercase font-semibold px-2 pt-1 pb-0.5 tracking-wider">General</div>
+            <div className="flex-1 py-2 px-2 space-y-0.5">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-[#96989D] px-1 pt-1 pb-0.5">Text Channels</div>
               {['general', 'off-topic', 'media'].map((ch, i) => (
-                <div key={ch} className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-pointer ${i === 0 ? 'bg-[#2a2a2d] text-white' : 'text-[#666] hover:text-[#999]'}`}>
-                  <span className="text-[#555] font-bold">#</span>
+                <div key={ch}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] cursor-pointer ${i === 0 ? 'bg-[#E0E2E6] text-[#1A1B1E]' : 'text-[#5C6068]'}`}>
+                  <span className="font-bold text-[#96989D] text-[10px]">#</span>
                   {ch}
                 </div>
               ))}
-              <div className="text-[10px] text-[#555] uppercase font-semibold px-2 pt-2 pb-0.5 tracking-wider">Voice</div>
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[#666] cursor-pointer hover:text-[#999]">
-                <span className="text-[#555]">🔊</span>
-                Lounge
-              </div>
-            </div>
-            <div className="h-11 bg-[#111113] flex items-center px-2 gap-2 border-t border-white/[0.05]">
-              <div className="w-6 h-6 rounded-full bg-[#e03131] flex items-center justify-center text-white text-[9px] font-bold">Y</div>
-              <div>
-                <div className="text-white text-[10px] font-semibold leading-none">you</div>
-                <div className="text-[#555] text-[9px]">online</div>
-              </div>
             </div>
           </div>
 
           {/* Chat */}
-          <div className="flex-1 bg-[#1a1a1c] flex flex-col overflow-hidden">
-            <div className="h-10 flex items-center px-4 gap-2 border-b border-white/[0.05]">
-              <span className="text-[#555] font-bold text-sm">#</span>
-              <span className="text-white text-xs font-semibold">general</span>
+          <div className="flex-1 bg-white flex flex-col overflow-hidden">
+            <div className="h-9 flex items-center px-4 border-b border-[#E3E5E8]">
+              <span className="text-[#96989D] font-bold text-xs">#</span>
+              <span className="text-[#1A1B1E] text-xs font-semibold ml-1">general</span>
             </div>
             <div className="flex-1 px-4 py-3 space-y-3 overflow-hidden">
               {[
-                { u: 'Alex', c: 'hey everyone, welcome to voxa!', t: 'Today at 11:02 AM', color: '#e03131' },
-                { u: 'Sam', c: 'this looks really clean ngl', t: 'Today at 11:04 AM', color: '#3b82f6' },
-                { u: 'Jordan', c: 'voice quality is actually great 👍', t: 'Today at 11:07 AM', color: '#8b5cf6' },
+                { u: 'Alex', c: 'hey everyone, welcome to voxa!', color: '#E53935' },
+                { u: 'Sam', c: 'this looks so clean 🔥', color: '#6366F1' },
+                { u: 'Jordan', c: 'way better than discord tbh', color: '#10B981' },
               ].map(m => (
                 <div key={m.u} className="flex gap-2.5">
-                  <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+                  <div className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
                     style={{ background: m.color }}>
                     {m.u[0]}
                   </div>
                   <div>
-                    <div className="flex items-baseline gap-1.5 mb-0.5">
-                      <span className="text-white text-xs font-semibold">{m.u}</span>
-                      <span className="text-[#444] text-[10px]">{m.t}</span>
-                    </div>
-                    <p className="text-[#bbb] text-xs">{m.c}</p>
+                    <span className="text-[#1A1B1E] text-[11px] font-semibold mr-1.5">{m.u}</span>
+                    <span className="text-[#5C6068] text-[10px]">Today at 2:34 PM</span>
+                    <p className="text-[#313439] text-[11px] mt-0.5">{m.c}</p>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mx-4 mb-3 bg-[#222224] rounded-lg h-8 flex items-center px-3 gap-2">
-              <span className="text-[#444] text-xs">Message #general</span>
+            <div className="mx-4 mb-3 bg-[#F2F3F5] rounded-xl h-8 flex items-center px-3 gap-2 border border-[#E3E5E8]">
+              <span className="text-[#96989D] text-xs">Message #general</span>
             </div>
           </div>
         </div>
@@ -165,55 +174,42 @@ function Preview() {
   )
 }
 
-const points = [
-  'Servers with unlimited channels and members',
-  'Voice and video calls built in',
-  'Roles, permissions, and moderation tools',
-  'Works in your browser — no download needed',
-  'Cross-platform: Windows, Mac, Linux, iOS',
-  'Free. No catch.',
-]
+function Features() {
+  const items = [
+    {
+      icon: Hash,
+      title: 'Servers & channels',
+      desc: 'Organize every conversation. Create servers for your communities, then divide them into focused channels and categories.',
+    },
+    {
+      icon: Mic,
+      title: 'Voice & video',
+      desc: 'Jump into a voice channel with one click. Sub-50ms latency, screen sharing, and camera — no scheduling needed.',
+    },
+    {
+      icon: Shield,
+      title: 'Free, no catch',
+      desc: "Everything works out of the box. Roles, permissions, moderation tools — no subscription required to access basic features.",
+    },
+  ]
 
-function Why() {
   return (
-    <section className="max-w-5xl mx-auto px-6 pb-24 grid md:grid-cols-2 gap-16 items-center">
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">
-          Everything you'd expect, nothing you don't.
+    <section className="max-w-6xl mx-auto px-6 pb-20">
+      <div className="mb-10">
+        <h2 className="text-3xl font-black text-[#1A1B1E] tracking-tight">
+          Everything you need.
+          <br />
+          <span className="text-[#96989D] font-medium">Nothing you don't.</span>
         </h2>
-        <p className="text-[#666] text-sm leading-relaxed mb-8">
-          We built Voxa because we wanted Discord without the bloat, the dark patterns, and the ever-expanding paywall. It's a chat app. It should just work.
-        </p>
-        <ul className="space-y-3">
-          {points.map(p => (
-            <li key={p} className="flex items-center gap-3 text-sm text-[#bbb]">
-              <div className="w-4 h-4 rounded-full bg-[#e03131]/15 flex items-center justify-center shrink-0">
-                <Check size={10} className="text-[#e03131]" strokeWidth={3} />
-              </div>
-              {p}
-            </li>
-          ))}
-        </ul>
       </div>
-
-      <div className="space-y-4">
-        {[
-          {
-            title: 'For gaming groups',
-            desc: 'Set up voice channels, share clips in text chat, coordinate without switching apps.'
-          },
-          {
-            title: 'For communities',
-            desc: 'Organize with categories, control who sees what with roles, keep things tidy with moderation.'
-          },
-          {
-            title: 'For small teams',
-            desc: 'Persistent channels, searchable history, file sharing. No per-seat pricing.'
-          },
-        ].map(card => (
-          <div key={card.title} className="bg-[#161617] border border-white/[0.06] rounded-lg p-4">
-            <h3 className="text-white font-semibold text-sm mb-1">{card.title}</h3>
-            <p className="text-[#666] text-sm leading-relaxed">{card.desc}</p>
+      <div className="grid sm:grid-cols-3 gap-4">
+        {items.map(item => (
+          <div key={item.title} className="bg-[#F7F8FA] rounded-2xl p-6 border border-[#E3E5E8]">
+            <div className="w-9 h-9 bg-[#E53935]/10 rounded-xl flex items-center justify-center mb-4">
+              <item.icon size={18} className="text-[#E53935]" />
+            </div>
+            <h3 className="font-bold text-[#1A1B1E] text-sm mb-2">{item.title}</h3>
+            <p className="text-[#5C6068] text-sm leading-relaxed">{item.desc}</p>
           </div>
         ))}
       </div>
@@ -221,13 +217,31 @@ function Why() {
   )
 }
 
+function CTA() {
+  return (
+    <section className="max-w-6xl mx-auto px-6 pb-24">
+      <div className="bg-[#E53935] rounded-3xl px-10 py-12 text-white text-center">
+        <h2 className="text-3xl font-black tracking-tight mb-3">Ready to ditch Discord?</h2>
+        <p className="text-white/75 text-base mb-7 max-w-md mx-auto">
+          Set up your server in 30 seconds. Your group will thank you.
+        </p>
+        <Link to="/login?mode=register"
+          className="inline-flex items-center gap-2 bg-white text-[#E53935] font-bold px-7 py-3 rounded-xl text-sm hover:bg-white/90 transition-colors">
+          Create an account free
+          <ArrowRight size={15} />
+        </Link>
+      </div>
+    </section>
+  )
+}
+
 function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] py-8">
-      <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[#555] text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 bg-[#e03131] rounded flex items-center justify-center">
-            <span className="text-white font-black text-xs leading-none">v</span>
+    <footer className="border-t border-[#E3E5E8] py-8">
+      <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-[#96989D] text-xs">
+          <div className="w-5 h-5 bg-[#E53935] rounded-md flex items-center justify-center">
+            <span className="text-white font-black text-[10px] leading-none">v</span>
           </div>
           <span>voxa.lol</span>
           <span>·</span>
@@ -235,7 +249,7 @@ function Footer() {
         </div>
         <div className="flex items-center gap-6">
           {['Terms', 'Privacy', 'Status', 'Download'].map(l => (
-            <a key={l} href="#" className="hover:text-[#999] transition-colors">{l}</a>
+            <a key={l} href="#" className="text-[#96989D] hover:text-[#1A1B1E] text-xs transition-colors">{l}</a>
           ))}
         </div>
       </div>

@@ -1,0 +1,1 @@
+- [Voxa project overview](voxa-overview.md) — architecture, design system, workflow setup, and production deployment notes

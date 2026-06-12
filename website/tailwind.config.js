@@ -6,24 +6,24 @@ export default {
       colors: {
         voxa: {
           red: '#E53935',
-          'red-dark': '#B71C1C',
+          'red-dark': '#C62828',
           'red-light': '#EF5350',
-          'red-glow': '#FF5252',
-          bg: '#111214',
-          'sidebar-dark': '#1E1F22',
-          'sidebar': '#2B2D31',
-          'chat': '#313338',
-          'input': '#383A40',
-          'hover': '#35373C',
-          'selected': '#404249',
-          text: '#DCDDDE',
-          'text-muted': '#949BA4',
-          'text-dim': '#5C5E66',
-          header: '#F2F3F5',
+          bg: '#FFFFFF',
+          sidebar: '#F2F3F5',
+          'sidebar-dark': '#E3E5E8',
+          chat: '#FFFFFF',
+          hover: '#EAEBEE',
+          selected: '#E0E2E6',
+          input: '#EAEBEE',
+          border: '#E3E5E8',
+          header: '#1A1B1E',
+          text: '#313439',
+          'text-muted': '#5C6068',
+          'text-dim': '#96989D',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'gg sans', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       }
     }
   },

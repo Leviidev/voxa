@@ -27,7 +27,7 @@ export default function ServerView() {
 
   if (!channel) {
     return (
-      <div className="flex-1 bg-voxa-chat flex flex-col items-center justify-center text-voxa-text-muted gap-3">
+      <div className="flex-1 bg-white flex flex-col items-center justify-center text-[#96989D] gap-3">
         <Hash size={48} className="opacity-20" />
         <p className="text-sm">Select a channel to start chatting</p>
       </div>

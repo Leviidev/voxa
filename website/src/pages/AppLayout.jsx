@@ -13,13 +13,13 @@ export default function AppLayout() {
   }, [user, loading])
 
   if (loading || !user) return (
-    <div className="flex h-screen items-center justify-center bg-voxa-bg">
-      <div className="w-10 h-10 border-2 border-voxa-red border-t-transparent rounded-full animate-spin" />
+    <div className="flex h-screen items-center justify-center bg-white">
+      <div className="w-8 h-8 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-voxa-bg">
+    <div className="flex h-screen w-screen overflow-hidden bg-white">
       <ServerSidebar />
       <ChannelSidebar />
       <div className="flex flex-1 overflow-hidden">

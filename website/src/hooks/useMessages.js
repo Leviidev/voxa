@@ -1,50 +1,88 @@
-import { useState, useEffect } from 'react'
-import { MOCK_MESSAGES } from '../data/mockData.js'
+import { useState, useEffect, useCallback } from 'react'
+import { api } from '../lib/api.js'
 
 export function useMessages(channelId) {
-  const key = `voxa_msgs_${channelId}`
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(false)
 
-  const [messages, setMessages] = useState(() => {
+  const localKey = `voxa_msgs_${channelId}`
+
+  const load = useCallback(async () => {
+    if (!channelId) return
+    // Load cache immediately
     try {
-      const stored = localStorage.getItem(key)
-      if (stored) return JSON.parse(stored)
+      const cached = localStorage.getItem(localKey)
+      if (cached) setMessages(JSON.parse(cached))
     } catch (_) {}
-    return MOCK_MESSAGES[channelId] ?? []
-  })
 
-  useEffect(() => {
+    setLoading(true)
     try {
-      const stored = localStorage.getItem(key)
-      if (stored) setMessages(JSON.parse(stored))
-      else setMessages(MOCK_MESSAGES[channelId] ?? [])
-    } catch (_) {
-      setMessages(MOCK_MESSAGES[channelId] ?? [])
+      const msgs = await api.getMessages(channelId)
+      setMessages(msgs)
+      localStorage.setItem(localKey, JSON.stringify(msgs))
+    } catch {
+      // Keep cached messages if API fails
+    } finally {
+      setLoading(false)
     }
   }, [channelId])
 
-  const addMessage = (msg) => {
-    setMessages(prev => {
-      const next = [...prev, msg]
-      try { localStorage.setItem(key, JSON.stringify(next)) } catch (_) {}
-      return next
-    })
+  useEffect(() => { load() }, [load])
+
+  const save = (msgs) => {
+    try { localStorage.setItem(localKey, JSON.stringify(msgs)) } catch (_) {}
   }
 
-  const deleteMessage = (id) => {
+  const addMessage = async (content, user) => {
+    // Optimistic
+    const optimistic = {
+      id: 'opt_' + Date.now(),
+      author: user.username,
+      authorId: user.id,
+      discriminator: user.discriminator,
+      content,
+      timestamp: new Date().toISOString(),
+      edited: false,
+    }
+    const next = [...messages, optimistic]
+    setMessages(next)
+
+    try {
+      const real = await api.sendMessage(channelId, content)
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === optimistic.id ? real : m)
+        save(updated)
+        return updated
+      })
+    } catch {
+      save(next)
+    }
+  }
+
+  const deleteMessage = async (id) => {
     setMessages(prev => {
       const next = prev.filter(m => m.id !== id)
-      try { localStorage.setItem(key, JSON.stringify(next)) } catch (_) {}
+      save(next)
       return next
     })
+    try { await api.deleteMessage(id) } catch (_) {}
   }
 
-  const editMessage = (id, content) => {
+  const editMessage = async (id, content) => {
     setMessages(prev => {
       const next = prev.map(m => m.id === id ? { ...m, content, edited: true } : m)
-      try { localStorage.setItem(key, JSON.stringify(next)) } catch (_) {}
+      save(next)
       return next
     })
+    try {
+      const updated = await api.editMessage(id, content)
+      setMessages(prev => {
+        const next = prev.map(m => m.id === id ? updated : m)
+        save(next)
+        return next
+      })
+    } catch (_) {}
   }
 
-  return { messages, addMessage, deleteMessage, editMessage }
+  return { messages, loading, addMessage, deleteMessage, editMessage }
 }
