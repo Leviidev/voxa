@@ -1,62 +1,13 @@
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
-import { fileURLToPath } from 'url'
+import pg from 'pg'
 
-const __dir = dirname(fileURLToPath(import.meta.url))
-const DB_PATH = `${__dir}/voxa_data.json`
+const { Pool } = pg
 
-// ─── Persistence ─────────────────────────────────────────────────────────────
-
-function serialize(db) {
-  return {
-    users: Object.fromEntries(db.users),
-    servers: Object.fromEntries(db.servers),
-    members: Object.fromEntries([...db.members].map(([k, v]) => [k, [...v]])),
-    categories: Object.fromEntries(db.categories),
-    channels: Object.fromEntries(db.channels),
-    messages: Object.fromEntries(db.messages),
-    serverChannels: Object.fromEntries(db.serverChannels),
-    roles: Object.fromEntries(db.roles),
-    memberRoles: Object.fromEntries(db.memberRoles),
-    invites: Object.fromEntries(db.invites),
-  }
-}
-
-function deserialize(data) {
-  return {
-    users: new Map(Object.entries(data.users ?? {})),
-    servers: new Map(Object.entries(data.servers ?? {})),
-    members: new Map(Object.entries(data.members ?? {}).map(([k, v]) => [k, new Set(v)])),
-    categories: new Map(Object.entries(data.categories ?? {})),
-    channels: new Map(Object.entries(data.channels ?? {})),
-    messages: new Map(Object.entries(data.messages ?? {})),
-    serverChannels: new Map(Object.entries(data.serverChannels ?? {})),
-    roles: new Map(Object.entries(data.roles ?? {})),
-    memberRoles: new Map(Object.entries(data.memberRoles ?? {})),
-    invites: new Map(Object.entries(data.invites ?? {})),
-  }
-}
-
-function loadDb() {
-  try {
-    if (existsSync(DB_PATH)) return deserialize(JSON.parse(readFileSync(DB_PATH, 'utf8')))
-  } catch {}
-  return deserialize({})
-}
-
-let saveTimer = null
-function persist() {
-  // Debounce saves to avoid hammering disk
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    try { writeFileSync(DB_PATH, JSON.stringify(serialize(db)), 'utf8') } catch {}
-  }, 300)
-}
-
-const db = loadDb()
-console.log(`DB loaded — users: ${db.users.size}, servers: ${db.servers.size}`)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+})
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -66,81 +17,117 @@ function sanitize(str, max = 2000) {
   return String(str ?? '').replace(/<[^>]*>/g, '').trim().slice(0, max)
 }
 
+function nullIfEmpty(v) {
+  return v === '' ? null : v ?? null
+}
+
+function publicUser(u) {
+  const { password_hash, email, ...rest } = u
+  return {
+    id: rest.id,
+    username: rest.username,
+    discriminator: rest.discriminator,
+    displayName: rest.display_name,
+    bio: rest.bio,
+    customStatus: rest.custom_status,
+    avatarUrl: rest.avatar_url,
+    avatarColor: rest.avatar_color,
+    bannerUrl: rest.banner_url,
+    bannerColor: rest.banner_color,
+    status: rest.status,
+    createdAt: rest.created_at,
+  }
+}
+
+function publicUserFull(u) {
+  return {
+    ...publicUser(u),
+    email: u.email,
+  }
+}
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 export async function createUser({ email, username, password }) {
   const emailLower = email.toLowerCase()
-  if ([...db.users.values()].find(u => u.email === emailLower))
-    throw Object.assign(new Error('Email already registered'), { status: 409 })
-  if ([...db.users.values()].find(u => u.username.toLowerCase() === username.toLowerCase()))
+
+  const existing = await pool.query(
+    'SELECT id FROM users WHERE email = $1 OR lower(username) = lower($2)',
+    [emailLower, username]
+  )
+  if (existing.rows.length > 0) {
+    const row = existing.rows[0]
+    const byEmail = await pool.query('SELECT id FROM users WHERE email = $1', [emailLower])
+    if (byEmail.rows.length > 0) throw Object.assign(new Error('Email already registered'), { status: 409 })
     throw Object.assign(new Error('Username already taken'), { status: 409 })
+  }
+
+  if (username.length < 2 || username.length > 32)
+    throw Object.assign(new Error('Username must be 2–32 characters'), { status: 400 })
 
   const id = generateId('u_')
-  const user = {
-    id,
-    email: emailLower,
-    username: sanitize(username, 32),
-    discriminator: String(Math.floor(1000 + Math.random() * 9000)),
-    passwordHash: await bcrypt.hash(password, 10),
-    displayName: null,
-    bio: null,
-    customStatus: null,
-    avatarUrl: null,
-    avatarColor: null,
-    bannerUrl: null,
-    bannerColor: null,
-    status: 'online',
-    createdAt: new Date().toISOString(),
-  }
-  db.users.set(id, user)
-  persist()
-  return publicUser(user)
+  const discriminator = String(Math.floor(1000 + Math.random() * 9000))
+  const passwordHash = await bcrypt.hash(password, 10)
+
+  const { rows } = await pool.query(
+    `INSERT INTO users (id, email, username, discriminator, password_hash, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, 'online', NOW())
+     RETURNING *`,
+    [id, emailLower, sanitize(username, 32), discriminator, passwordHash]
+  )
+  return publicUser(rows[0])
 }
 
 export async function verifyUser(email, password) {
-  const user = [...db.users.values()].find(u => u.email === email.toLowerCase())
-  if (!user) throw Object.assign(new Error('Invalid email or password'), { status: 401 })
-  const ok = await bcrypt.compare(password, user.passwordHash)
+  const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()])
+  if (!rows.length) throw Object.assign(new Error('Invalid email or password'), { status: 401 })
+  const ok = await bcrypt.compare(password, rows[0].password_hash)
   if (!ok) throw Object.assign(new Error('Invalid email or password'), { status: 401 })
-  return publicUser(user)
+  return publicUser(rows[0])
 }
 
-export function getUserById(id) {
-  const u = db.users.get(id)
-  return u ? publicUser(u) : null
+export async function getUserById(id) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id])
+  return rows.length ? publicUser(rows[0]) : null
 }
 
-export function updateUser(userId, fields) {
-  const user = db.users.get(userId)
-  if (!user) throw Object.assign(new Error('User not found'), { status: 404 })
+export async function updateUser(userId, fields) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [userId])
+  if (!rows.length) throw Object.assign(new Error('User not found'), { status: 404 })
 
   const allowed = ['displayName', 'bio', 'customStatus', 'avatarUrl', 'avatarColor', 'bannerUrl', 'bannerColor', 'status']
-  const update = {}
-  for (const key of allowed) {
-    if (key in fields) update[key] = fields[key] === '' ? null : sanitize(fields[key] ?? '', 200)
+  const colMap = {
+    displayName: 'display_name', bio: 'bio', customStatus: 'custom_status',
+    avatarUrl: 'avatar_url', avatarColor: 'avatar_color',
+    bannerUrl: 'banner_url', bannerColor: 'banner_color', status: 'status',
   }
-  // Status enum check
-  if (update.status && !['online', 'idle', 'dnd', 'offline'].includes(update.status)) delete update.status
+  const validStatuses = ['online', 'idle', 'dnd', 'offline']
 
-  const updated = { ...user, ...update }
-  db.users.set(userId, updated)
-  persist()
-  return publicUser(updated)
-}
+  const setClauses = []
+  const values = []
+  let idx = 1
 
-export function publicUser(u) {
-  const { passwordHash, email, ...rest } = u
-  return rest
-}
+  for (const key of allowed) {
+    if (!(key in fields)) continue
+    if (key === 'status' && !validStatuses.includes(fields[key])) continue
+    const val = nullIfEmpty(fields[key] === '' ? null : sanitize(fields[key] ?? '', 200))
+    setClauses.push(`${colMap[key]} = $${idx++}`)
+    values.push(val)
+  }
 
-export function publicUserFull(u) {
-  const { passwordHash, ...rest } = u
-  return rest
+  if (!setClauses.length) return publicUser(rows[0])
+
+  values.push(userId)
+  const { rows: updated } = await pool.query(
+    `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+    values
+  )
+  return publicUser(updated[0])
 }
 
 // ─── Servers ─────────────────────────────────────────────────────────────────
 
-export function createServer({ name, ownerId }) {
+export async function createServer({ name, ownerId }) {
   const id = generateId('srv_')
   const generalCatId = generateId('cat_')
   const generalChId = generateId('ch_')
@@ -148,371 +135,422 @@ export function createServer({ name, ownerId }) {
   const voiceChId = generateId('vc_')
   const everyoneRoleId = generateId('role_')
 
-  db.servers.set(id, {
-    id, name: sanitize(name, 100), iconUrl: null, iconColor: null,
-    description: null, bannerUrl: null, bannerColor: null,
-    ownerId, createdAt: new Date().toISOString(),
-  })
+  await pool.query(
+    `INSERT INTO servers (id, name, owner_id, created_at) VALUES ($1, $2, $3, NOW())`,
+    [id, sanitize(name, 100), ownerId]
+  )
+  await pool.query(
+    `INSERT INTO categories (id, server_id, name, position) VALUES ($1,$2,'Text Channels',0), ($3,$2,'Voice Channels',1)`,
+    [generalCatId, id, voiceCatId]
+  )
+  await pool.query(
+    `INSERT INTO channels (id, server_id, category_id, name, type, position, created_at) VALUES
+     ($1,$2,$3,'general','text',0,NOW()), ($4,$2,$5,'General','voice',0,NOW())`,
+    [generalChId, id, generalCatId, voiceChId, voiceCatId]
+  )
+  await pool.query(
+    `INSERT INTO server_members (server_id, user_id) VALUES ($1,$2)`,
+    [id, ownerId]
+  )
+  await pool.query(
+    `INSERT INTO roles (id, server_id, name, hoist, position, permissions, is_default, created_at)
+     VALUES ($1,$2,'@everyone',false,0,$3,true,NOW())`,
+    [everyoneRoleId, id, ['send_messages', 'read_messages']]
+  )
+  await pool.query(
+    `INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3)`,
+    [id, ownerId, everyoneRoleId]
+  )
 
-  db.categories.set(id, [
-    { id: generalCatId, name: 'Text Channels', position: 0 },
-    { id: voiceCatId, name: 'Voice Channels', position: 1 },
-  ])
-
-  db.channels.set(generalChId, { id: generalChId, serverId: id, categoryId: generalCatId, name: 'general', type: 'text', topic: null, position: 0, createdAt: new Date().toISOString() })
-  db.channels.set(voiceChId, { id: voiceChId, serverId: id, categoryId: voiceCatId, name: 'General', type: 'voice', position: 0, createdAt: new Date().toISOString() })
-  db.serverChannels.set(id, [generalChId, voiceChId])
-  db.messages.set(generalChId, [])
-
-  db.members.set(id, new Set([ownerId]))
-
-  // Default @everyone role
-  db.roles.set(id, [{
-    id: everyoneRoleId, name: '@everyone', color: null,
-    hoist: false, position: 0, permissions: ['send_messages', 'read_messages'],
-    isDefault: true, createdAt: new Date().toISOString(),
-  }])
-  db.memberRoles.set(`${id}_${ownerId}`, [everyoneRoleId])
-
-  persist()
   return getServerWithChannels(id, ownerId)
 }
 
-export function getServerWithChannels(serverId, userId) {
-  const server = db.servers.get(serverId)
+export async function getServerWithChannels(serverId, userId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id = $1', [serverId])
   if (!server) return null
-  const memberIds = db.members.get(serverId) ?? new Set()
-  if (!memberIds.has(userId)) return null
 
-  const cats = db.categories.get(serverId) ?? []
-  const channelIds = db.serverChannels.get(serverId) ?? []
-  const roles = db.roles.get(serverId) ?? []
+  const { rows: [membership] } = await pool.query(
+    'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2',
+    [serverId, userId]
+  )
+  if (!membership) return null
+
+  const { rows: cats } = await pool.query(
+    'SELECT * FROM categories WHERE server_id=$1 ORDER BY position', [serverId]
+  )
+  const { rows: channels } = await pool.query(
+    'SELECT * FROM channels WHERE server_id=$1 ORDER BY position', [serverId]
+  )
+  const { rows: roles } = await pool.query(
+    'SELECT * FROM roles WHERE server_id=$1 ORDER BY position', [serverId]
+  )
+  const { rows: memberRows } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.discriminator, u.avatar_url, u.avatar_color, u.status,
+            array_agg(mr.role_id) FILTER (WHERE mr.role_id IS NOT NULL) as role_ids
+     FROM server_members sm
+     JOIN users u ON u.id = sm.user_id
+     LEFT JOIN member_roles mr ON mr.server_id=sm.server_id AND mr.user_id=sm.user_id
+     WHERE sm.server_id=$1
+     GROUP BY u.id`,
+    [serverId]
+  )
 
   const categories = cats.map(cat => ({
-    id: cat.id, name: cat.name,
-    channels: channelIds.map(cid => db.channels.get(cid))
-      .filter(c => c?.categoryId === cat.id)
-      .map(c => ({ id: c.id, name: c.name, type: c.type, topic: c.topic }))
-      .sort((a, b) => a.position - b.position),
-  })).sort((a, b) => a.position - b.position)
+    id: cat.id,
+    name: cat.name,
+    channels: channels
+      .filter(c => c.category_id === cat.id)
+      .map(c => ({ id: c.id, name: c.name, type: c.type, topic: c.topic })),
+  }))
 
-  const members = [...memberIds].map(uid => {
-    const u = db.users.get(uid)
-    if (!u) return null
-    const memberRoleIds = db.memberRoles.get(`${serverId}_${uid}`) ?? []
-    const memberRoles = roles.filter(r => memberRoleIds.includes(r.id))
+  const members = memberRows.map(u => {
+    const roleIds = u.role_ids || []
+    const memberRoles = roles.filter(r => roleIds.includes(r.id))
     return {
-      id: u.id, username: u.username, displayName: u.displayName, discriminator: u.discriminator,
-      avatarUrl: u.avatarUrl, avatarColor: u.avatarColor, status: u.status,
-      isOwner: u.id === server.ownerId,
+      id: u.id,
+      username: u.username,
+      displayName: u.display_name,
+      discriminator: u.discriminator,
+      avatarUrl: u.avatar_url,
+      avatarColor: u.avatar_color,
+      status: u.status,
+      isOwner: u.id === server.owner_id,
       roles: memberRoles.map(r => ({ id: r.id, name: r.name, color: r.color })),
     }
-  }).filter(Boolean)
+  })
 
-  return { ...server, categories, members, roles }
-}
-
-export function updateServer(serverId, userId, fields) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-
-  const allowed = ['name', 'iconUrl', 'iconColor', 'description', 'bannerUrl', 'bannerColor']
-  const update = {}
-  for (const key of allowed) {
-    if (key in fields) update[key] = fields[key] === '' ? null : sanitize(fields[key] ?? '', key === 'name' ? 100 : 300)
+  return {
+    id: server.id,
+    name: server.name,
+    iconUrl: server.icon_url,
+    iconColor: server.icon_color,
+    description: server.description,
+    bannerUrl: server.banner_url,
+    bannerColor: server.banner_color,
+    ownerId: server.owner_id,
+    createdAt: server.created_at,
+    categories,
+    members,
+    roles: roles.map(r => ({
+      id: r.id, name: r.name, color: r.color, hoist: r.hoist,
+      position: r.position, permissions: r.permissions, isDefault: r.is_default,
+    })),
   }
-  if (update.name && !update.name.trim()) throw Object.assign(new Error('Name cannot be empty'), { status: 400 })
-
-  const updated = { ...server, ...update }
-  db.servers.set(serverId, updated)
-  persist()
-  return updated
 }
 
-export function getUserServers(userId) {
-  const result = []
-  for (const [serverId, memberSet] of db.members) {
-    if (memberSet.has(userId)) {
-      const s = getServerWithChannels(serverId, userId)
-      if (s) result.push(s)
-    }
+export async function updateServer(serverId, userId, fields) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+
+  const colMap = {
+    name: 'name', iconUrl: 'icon_url', iconColor: 'icon_color',
+    description: 'description', bannerUrl: 'banner_url', bannerColor: 'banner_color',
   }
-  return result.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-}
+  const setClauses = []
+  const values = []
+  let idx = 1
 
-export function deleteServer(serverId, userId) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  db.servers.delete(serverId)
-  db.members.delete(serverId)
-  db.categories.delete(serverId)
-  db.roles.delete(serverId)
-  const channelIds = db.serverChannels.get(serverId) ?? []
-  channelIds.forEach(cid => { db.channels.delete(cid); db.messages.delete(cid) })
-  db.serverChannels.delete(serverId)
-  // Clean member roles
-  for (const key of db.memberRoles.keys()) {
-    if (key.startsWith(`${serverId}_`)) db.memberRoles.delete(key)
+  for (const [key, col] of Object.entries(colMap)) {
+    if (!(key in fields)) continue
+    const val = fields[key] === '' ? null : sanitize(fields[key] ?? '', key === 'name' ? 100 : 300)
+    if (key === 'name' && !val?.trim()) throw Object.assign(new Error('Name cannot be empty'), { status: 400 })
+    setClauses.push(`${col} = $${idx++}`)
+    values.push(val)
   }
-  persist()
+
+  if (!setClauses.length) return server
+  values.push(serverId)
+  const { rows: [updated] } = await pool.query(
+    `UPDATE servers SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING *`,
+    values
+  )
+  return {
+    id: updated.id, name: updated.name, iconUrl: updated.icon_url, iconColor: updated.icon_color,
+    description: updated.description, bannerUrl: updated.banner_url, bannerColor: updated.banner_color,
+    ownerId: updated.owner_id, createdAt: updated.created_at,
+  }
 }
 
-export function leaveServer(serverId, userId) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId === userId) throw Object.assign(new Error('Owner cannot leave — delete server instead'), { status: 400 })
-  const memberSet = db.members.get(serverId) ?? new Set()
-  memberSet.delete(userId)
-  db.members.set(serverId, memberSet)
-  db.memberRoles.delete(`${serverId}_${userId}`)
-  persist()
+export async function getUserServers(userId) {
+  const { rows } = await pool.query(
+    'SELECT server_id FROM server_members WHERE user_id=$1', [userId]
+  )
+  const servers = await Promise.all(rows.map(r => getServerWithChannels(r.server_id, userId)))
+  return servers.filter(Boolean).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 }
 
-export function kickMember(serverId, requesterId, targetId) {
-  const server = db.servers.get(serverId)
+export async function deleteServer(serverId, userId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  if (server.owner_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query('DELETE FROM servers WHERE id=$1', [serverId])
+}
+
+export async function leaveServer(serverId, userId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id === userId) throw Object.assign(new Error('Owner cannot leave — delete server instead'), { status: 400 })
+  await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, userId])
+  await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2', [serverId, userId])
+}
+
+export async function kickMember(serverId, requesterId, targetId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   if (targetId === requesterId) throw Object.assign(new Error('Cannot kick yourself'), { status: 400 })
-  const memberSet = db.members.get(serverId) ?? new Set()
-  memberSet.delete(targetId)
-  db.members.set(serverId, memberSet)
-  db.memberRoles.delete(`${serverId}_${targetId}`)
-  persist()
+  await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+  await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
 }
 
 // ─── Roles ───────────────────────────────────────────────────────────────────
-
-export function getRoles(serverId) {
-  return db.roles.get(serverId) ?? []
-}
-
-export function createRole(serverId, requesterId, { name, color, hoist, permissions }) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const roles = db.roles.get(serverId) ?? []
-  const role = {
-    id: generateId('role_'), name: sanitize(name, 64), color: color ?? null,
-    hoist: Boolean(hoist), position: roles.length,
-    permissions: Array.isArray(permissions) ? permissions.filter(p => VALID_PERMISSIONS.includes(p)) : [],
-    isDefault: false, createdAt: new Date().toISOString(),
-  }
-  roles.push(role)
-  db.roles.set(serverId, roles)
-  persist()
-  return role
-}
-
-export function updateRole(serverId, requesterId, roleId, fields) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const roles = db.roles.get(serverId) ?? []
-  const idx = roles.findIndex(r => r.id === roleId)
-  if (idx === -1) throw Object.assign(new Error('Role not found'), { status: 404 })
-  if (roles[idx].isDefault) throw Object.assign(new Error('Cannot modify @everyone'), { status: 400 })
-
-  const updated = { ...roles[idx] }
-  if (fields.name) updated.name = sanitize(fields.name, 64)
-  if (fields.color !== undefined) updated.color = fields.color || null
-  if (fields.hoist !== undefined) updated.hoist = Boolean(fields.hoist)
-  if (Array.isArray(fields.permissions)) updated.permissions = fields.permissions.filter(p => VALID_PERMISSIONS.includes(p))
-
-  roles[idx] = updated
-  db.roles.set(serverId, roles)
-  persist()
-  return updated
-}
-
-export function deleteRole(serverId, requesterId, roleId) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const roles = db.roles.get(serverId) ?? []
-  const role = roles.find(r => r.id === roleId)
-  if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
-  if (role.isDefault) throw Object.assign(new Error('Cannot delete @everyone'), { status: 400 })
-  db.roles.set(serverId, roles.filter(r => r.id !== roleId))
-  // Remove from all members
-  for (const [key, roleIds] of db.memberRoles) {
-    if (key.startsWith(`${serverId}_`)) {
-      db.memberRoles.set(key, roleIds.filter(r => r !== roleId))
-    }
-  }
-  persist()
-}
-
-export function assignRole(serverId, requesterId, targetUserId, roleId) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const roles = db.roles.get(serverId) ?? []
-  if (!roles.find(r => r.id === roleId)) throw Object.assign(new Error('Role not found'), { status: 404 })
-  const key = `${serverId}_${targetUserId}`
-  const current = db.memberRoles.get(key) ?? []
-  if (!current.includes(roleId)) {
-    db.memberRoles.set(key, [...current, roleId])
-    persist()
-  }
-}
-
-export function removeRole(serverId, requesterId, targetUserId, roleId) {
-  const server = db.servers.get(serverId)
-  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  if (server.ownerId !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const roles = db.roles.get(serverId) ?? []
-  const role = roles.find(r => r.id === roleId)
-  if (role?.isDefault) throw Object.assign(new Error('Cannot remove @everyone'), { status: 400 })
-  const key = `${serverId}_${targetUserId}`
-  const current = db.memberRoles.get(key) ?? []
-  db.memberRoles.set(key, current.filter(r => r !== roleId))
-  persist()
-}
 
 const VALID_PERMISSIONS = [
   'administrator', 'manage_server', 'manage_roles', 'manage_channels',
   'kick_members', 'ban_members', 'manage_messages', 'send_messages', 'read_messages',
 ]
 
+export async function getRoles(serverId) {
+  const { rows } = await pool.query('SELECT * FROM roles WHERE server_id=$1 ORDER BY position', [serverId])
+  return rows.map(r => ({
+    id: r.id, name: r.name, color: r.color, hoist: r.hoist,
+    position: r.position, permissions: r.permissions, isDefault: r.is_default, createdAt: r.created_at,
+  }))
+}
+
+export async function createRole(serverId, requesterId, { name, color, hoist, permissions }) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) FROM roles WHERE server_id=$1', [serverId])
+  const id = generateId('role_')
+  const perms = Array.isArray(permissions) ? permissions.filter(p => VALID_PERMISSIONS.includes(p)) : []
+  const { rows: [role] } = await pool.query(
+    `INSERT INTO roles (id, server_id, name, color, hoist, position, permissions, is_default, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW()) RETURNING *`,
+    [id, serverId, sanitize(name, 64), color || null, Boolean(hoist), parseInt(count), perms]
+  )
+  return { id: role.id, name: role.name, color: role.color, hoist: role.hoist, position: role.position, permissions: role.permissions, isDefault: role.is_default }
+}
+
+export async function updateRole(serverId, requesterId, roleId, fields) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [role] } = await pool.query('SELECT * FROM roles WHERE id=$1 AND server_id=$2', [roleId, serverId])
+  if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
+  if (role.is_default) throw Object.assign(new Error('Cannot modify @everyone'), { status: 400 })
+
+  const setClauses = []
+  const values = []
+  let idx = 1
+  if (fields.name) { setClauses.push(`name=$${idx++}`); values.push(sanitize(fields.name, 64)) }
+  if (fields.color !== undefined) { setClauses.push(`color=$${idx++}`); values.push(fields.color || null) }
+  if (fields.hoist !== undefined) { setClauses.push(`hoist=$${idx++}`); values.push(Boolean(fields.hoist)) }
+  if (Array.isArray(fields.permissions)) {
+    setClauses.push(`permissions=$${idx++}`)
+    values.push(fields.permissions.filter(p => VALID_PERMISSIONS.includes(p)))
+  }
+  if (!setClauses.length) return role
+  values.push(roleId)
+  const { rows: [updated] } = await pool.query(
+    `UPDATE roles SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING *`, values
+  )
+  return { id: updated.id, name: updated.name, color: updated.color, hoist: updated.hoist, position: updated.position, permissions: updated.permissions, isDefault: updated.is_default }
+}
+
+export async function deleteRole(serverId, requesterId, roleId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [role] } = await pool.query('SELECT * FROM roles WHERE id=$1', [roleId])
+  if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
+  if (role.is_default) throw Object.assign(new Error('Cannot delete @everyone'), { status: 400 })
+  await pool.query('DELETE FROM roles WHERE id=$1', [roleId])
+}
+
+export async function assignRole(serverId, requesterId, targetUserId, roleId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [role] } = await pool.query('SELECT id FROM roles WHERE id=$1 AND server_id=$2', [roleId, serverId])
+  if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
+  await pool.query(
+    'INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+    [serverId, targetUserId, roleId]
+  )
+}
+
+export async function removeRole(serverId, requesterId, targetUserId, roleId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [role] } = await pool.query('SELECT * FROM roles WHERE id=$1', [roleId])
+  if (role?.is_default) throw Object.assign(new Error('Cannot remove @everyone'), { status: 400 })
+  await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2 AND role_id=$3', [serverId, targetUserId, roleId])
+}
+
 // ─── Channels ────────────────────────────────────────────────────────────────
 
-export function createChannel({ serverId, name, type, userId }) {
-  const server = db.servers.get(serverId)
+export async function createChannel({ serverId, name, type, userId }) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
 
-  const cats = db.categories.get(serverId) ?? []
-  const targetCat = cats.find(c => c.name === (type === 'voice' ? 'Voice Channels' : 'Text Channels')) ?? cats[0]
-  const id = generateId(type === 'voice' ? 'vc_' : 'ch_')
-  const existingInCat = (db.serverChannels.get(serverId) ?? [])
-    .map(cid => db.channels.get(cid)).filter(c => c?.categoryId === targetCat?.id).length
+  const targetName = type === 'voice' ? 'Voice Channels' : 'Text Channels'
+  const { rows: cats } = await pool.query('SELECT * FROM categories WHERE server_id=$1', [serverId])
+  const targetCat = cats.find(c => c.name === targetName) || cats[0]
 
-  db.channels.set(id, {
-    id, serverId, categoryId: targetCat?.id,
-    name: sanitize(name, 100).toLowerCase().replace(/\s+/g, '-'),
-    type, topic: null, position: existingInCat, createdAt: new Date().toISOString(),
-  })
-  db.serverChannels.set(serverId, [...(db.serverChannels.get(serverId) ?? []), id])
-  if (type === 'text') db.messages.set(id, [])
-  persist()
-  const ch = db.channels.get(id)
+  const { rows: [{ count }] } = await pool.query(
+    'SELECT COUNT(*) FROM channels WHERE server_id=$1 AND category_id=$2',
+    [serverId, targetCat?.id]
+  )
+
+  const id = generateId(type === 'voice' ? 'vc_' : 'ch_')
+  const safeName = sanitize(name, 100).toLowerCase().replace(/\s+/g, '-')
+  const { rows: [ch] } = await pool.query(
+    `INSERT INTO channels (id, server_id, category_id, name, type, position, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING *`,
+    [id, serverId, targetCat?.id || null, safeName, type, parseInt(count)]
+  )
   return { id: ch.id, name: ch.name, type: ch.type }
 }
 
 // ─── Invites ─────────────────────────────────────────────────────────────────
 
-export function createInvite(serverId, inviterId) {
-  const server = db.servers.get(serverId)
+export async function createInvite(serverId, inviterId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  const memberIds = db.members.get(serverId) ?? new Set()
-  if (!memberIds.has(inviterId)) throw Object.assign(new Error('Not a member'), { status: 403 })
+  const { rows: [member] } = await pool.query(
+    'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, inviterId]
+  )
+  if (!member) throw Object.assign(new Error('Not a member'), { status: 403 })
 
-  // Reuse existing valid invite by same user
-  const existing = [...db.invites.values()].find(i => i.serverId === serverId && i.inviterId === inviterId)
-  if (existing) return existing
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM invites WHERE server_id=$1 AND inviter_id=$2', [serverId, inviterId]
+  )
+  if (existing) return {
+    id: existing.id, code: existing.code, serverId: existing.server_id,
+    inviterId: existing.inviter_id, uses: existing.uses, maxUses: existing.max_uses,
+    expiresAt: existing.expires_at, createdAt: existing.created_at,
+  }
 
   const code = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
-  const invite = { id: generateId('inv_'), code, serverId, inviterId, uses: 0, maxUses: null, expiresAt: null, createdAt: new Date().toISOString() }
-  db.invites.set(code, invite)
-  persist()
-  return invite
+  const id = generateId('inv_')
+  const { rows: [invite] } = await pool.query(
+    `INSERT INTO invites (id, code, server_id, inviter_id, uses, created_at)
+     VALUES ($1,$2,$3,$4,0,NOW()) RETURNING *`,
+    [id, code, serverId, inviterId]
+  )
+  return { id: invite.id, code: invite.code, serverId: invite.server_id, inviterId: invite.inviter_id, uses: invite.uses, maxUses: invite.max_uses, expiresAt: invite.expires_at, createdAt: invite.created_at }
 }
 
-export function getServerInvites(serverId, userId) {
-  const server = db.servers.get(serverId)
+export async function getServerInvites(serverId, userId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
-  const memberIds = db.members.get(serverId) ?? new Set()
-  if (!memberIds.has(userId)) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  return [...db.invites.values()].filter(i => i.serverId === serverId)
+  const { rows: [member] } = await pool.query(
+    'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, userId]
+  )
+  if (!member) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows } = await pool.query('SELECT * FROM invites WHERE server_id=$1', [serverId])
+  return rows.map(i => ({ id: i.id, code: i.code, serverId: i.server_id, inviterId: i.inviter_id, uses: i.uses, maxUses: i.max_uses, expiresAt: i.expires_at, createdAt: i.created_at }))
 }
 
-export function useInvite(code, userId) {
-  const invite = db.invites.get(code)
+export async function useInvite(code, userId) {
+  const { rows: [invite] } = await pool.query('SELECT * FROM invites WHERE code=$1', [code])
   if (!invite) throw Object.assign(new Error('Invalid invite code'), { status: 404 })
-  if (invite.expiresAt && new Date(invite.expiresAt) < new Date())
+  if (invite.expires_at && new Date(invite.expires_at) < new Date())
     throw Object.assign(new Error('Invite expired'), { status: 410 })
-  if (invite.maxUses && invite.uses >= invite.maxUses)
+  if (invite.max_uses && invite.uses >= invite.max_uses)
     throw Object.assign(new Error('Invite has reached max uses'), { status: 410 })
 
-  const memberSet = db.members.get(invite.serverId) ?? new Set()
-  if (!memberSet.has(userId)) {
-    memberSet.add(userId)
-    db.members.set(invite.serverId, memberSet)
-    // Give default role
-    const roles = db.roles.get(invite.serverId) ?? []
-    const defaultRole = roles.find(r => r.isDefault)
+  const { rows: [member] } = await pool.query(
+    'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2', [invite.server_id, userId]
+  )
+  if (!member) {
+    await pool.query('INSERT INTO server_members (server_id, user_id) VALUES ($1,$2)', [invite.server_id, userId])
+    const { rows: [defaultRole] } = await pool.query(
+      'SELECT id FROM roles WHERE server_id=$1 AND is_default=true', [invite.server_id]
+    )
     if (defaultRole) {
-      const key = `${invite.serverId}_${userId}`
-      const current = db.memberRoles.get(key) ?? []
-      db.memberRoles.set(key, [...current, defaultRole.id])
+      await pool.query(
+        'INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [invite.server_id, userId, defaultRole.id]
+      )
     }
-    invite.uses++
-    db.invites.set(code, invite)
-    persist()
+    await pool.query('UPDATE invites SET uses=uses+1 WHERE code=$1', [code])
   }
-  return getServerWithChannels(invite.serverId, userId)
+  return getServerWithChannels(invite.server_id, userId)
 }
 
-export function deleteInvite(code, userId) {
-  const invite = db.invites.get(code)
+export async function deleteInvite(code, userId) {
+  const { rows: [invite] } = await pool.query('SELECT * FROM invites WHERE code=$1', [code])
   if (!invite) throw Object.assign(new Error('Invite not found'), { status: 404 })
-  const server = db.servers.get(invite.serverId)
-  if (server?.ownerId !== userId && invite.inviterId !== userId)
+  const { rows: [server] } = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [invite.server_id])
+  if (server?.owner_id !== userId && invite.inviter_id !== userId)
     throw Object.assign(new Error('Forbidden'), { status: 403 })
-  db.invites.delete(code)
-  persist()
+  await pool.query('DELETE FROM invites WHERE code=$1', [code])
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 
-export function getMessages(channelId, limit = 50) {
-  return (db.messages.get(channelId) ?? []).slice(-limit)
+export async function getMessages(channelId, limit = 50) {
+  const { rows } = await pool.query(
+    'SELECT * FROM messages WHERE channel_id=$1 ORDER BY timestamp ASC LIMIT $2',
+    [channelId, limit]
+  )
+  return rows.map(m => ({
+    id: m.id, channelId: m.channel_id, authorId: m.author_id,
+    author: m.author, displayName: m.display_name,
+    avatarUrl: m.avatar_url, avatarColor: m.avatar_color,
+    discriminator: m.discriminator, content: m.content,
+    timestamp: m.timestamp, edited: m.edited, editedAt: m.edited_at,
+  }))
 }
 
-export function createMessage({ channelId, userId, content }) {
-  const channel = db.channels.get(channelId)
+export async function createMessage({ channelId, userId, content }) {
+  const { rows: [channel] } = await pool.query('SELECT * FROM channels WHERE id=$1', [channelId])
   if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
-  const user = db.users.get(userId)
-  const msgs = db.messages.get(channelId) ?? []
-  const msg = {
-    id: generateId('msg_'), channelId, authorId: userId,
-    author: user?.username ?? 'Unknown',
-    displayName: user?.displayName ?? null,
-    avatarUrl: user?.avatarUrl ?? null,
-    avatarColor: user?.avatarColor ?? null,
-    discriminator: user?.discriminator ?? '0000',
-    content: sanitize(content, 2000),
-    timestamp: new Date().toISOString(), edited: false, editedAt: null,
+  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id=$1', [userId])
+
+  const id = generateId('msg_')
+  const { rows: [msg] } = await pool.query(
+    `INSERT INTO messages (id, channel_id, author_id, author, display_name, avatar_url, avatar_color, discriminator, content, timestamp, edited)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),false) RETURNING *`,
+    [id, channelId, userId, user?.username ?? 'Unknown', user?.display_name ?? null,
+     user?.avatar_url ?? null, user?.avatar_color ?? null,
+     user?.discriminator ?? '0000', sanitize(content, 2000)]
+  )
+  return {
+    id: msg.id, channelId: msg.channel_id, authorId: msg.author_id,
+    author: msg.author, displayName: msg.display_name,
+    avatarUrl: msg.avatar_url, avatarColor: msg.avatar_color,
+    discriminator: msg.discriminator, content: msg.content,
+    timestamp: msg.timestamp, edited: msg.edited, editedAt: msg.edited_at,
   }
-  msgs.push(msg)
-  db.messages.set(channelId, msgs)
-  persist()
-  return msg
 }
 
-export function editMessage(msgId, userId, content) {
-  for (const [channelId, msgs] of db.messages) {
-    const idx = msgs.findIndex(m => m.id === msgId)
-    if (idx === -1) continue
-    if (msgs[idx].authorId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-    msgs[idx] = { ...msgs[idx], content: sanitize(content, 2000), edited: true, editedAt: new Date().toISOString() }
-    db.messages.set(channelId, msgs)
-    persist()
-    return msgs[idx]
+export async function editMessage(msgId, userId, content) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM messages WHERE id=$1', [msgId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [updated] } = await pool.query(
+    `UPDATE messages SET content=$1, edited=true, edited_at=NOW() WHERE id=$2 RETURNING *`,
+    [sanitize(content, 2000), msgId]
+  )
+  return {
+    id: updated.id, channelId: updated.channel_id, authorId: updated.author_id,
+    author: updated.author, displayName: updated.display_name,
+    avatarUrl: updated.avatar_url, avatarColor: updated.avatar_color,
+    discriminator: updated.discriminator, content: updated.content,
+    timestamp: updated.timestamp, edited: updated.edited, editedAt: updated.edited_at,
   }
-  throw Object.assign(new Error('Message not found'), { status: 404 })
 }
 
-export function deleteMessage(msgId, userId) {
-  for (const [channelId, msgs] of db.messages) {
-    const idx = msgs.findIndex(m => m.id === msgId)
-    if (idx === -1) continue
-    if (msgs[idx].authorId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-    msgs.splice(idx, 1)
-    db.messages.set(channelId, msgs)
-    persist()
-    return
-  }
-  throw Object.assign(new Error('Message not found'), { status: 404 })
+export async function deleteMessage(msgId, userId) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM messages WHERE id=$1', [msgId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query('DELETE FROM messages WHERE id=$1', [msgId])
 }

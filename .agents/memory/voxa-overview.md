@@ -10,9 +10,15 @@ description: Key architecture decisions, design system, and deployment notes for
 - **API**: Express in `website/server/`, port 3001. Workflow: "API Server" → `cd website && npm run api`
 - **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`)
 - **API routes**: `/api/auth/*`, `/api/users/*`, `/api/servers/*`, `/api/channels/*`, `/api/messages/*`, `/api/invites/*`
-- **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, tokens stored as `voxa_token`
-- **Persistence**: JSON file at `website/server/voxa_data.json` — auto-saves on every write (300ms debounce), loads on startup
+- **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, JWT_SECRET stored as env var, tokens stored in localStorage as `voxa_token`
+- **Persistence**: Replit PostgreSQL via `pg` Pool (`DATABASE_URL` env var). All db.js functions are async — all route handlers must use `async/await`.
 - **Rate limiting**: express-rate-limit — auth: 8/15min, general: 200/5min, messages: 30/min
+
+## Database Schema (PostgreSQL)
+
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `server_members`, `roles`, `member_roles`, `invites`
+- Snake_case columns in DB; camelCase in API responses (mapped in db.js)
+- All `db.js` functions return Promises — every route handler must `await` them
 
 ## Design System (Light Theme)
 
@@ -20,13 +26,14 @@ description: Key architecture decisions, design system, and deployment notes for
 - Hover: `#EAEBEE`, Selected: `#E0E2E6`, Input: `#EAEBEE`, Border: `#E3E5E8`
 - Accent red: `#E53935` (brand color), Red dark: `#C62828`
 - Text: `#1A1B1E` (header/bold), `#313439` (body), `#5C6068` (muted), `#96989D` (dim)
-- All colors in `tailwind.config.js` under `voxa.*`
+- Support email: voxa@voxa.lol (shown in footer and login page)
 
 ## Key Design Decisions
 
 - Server sidebar (220px) shows server **names** as full rows — intentionally NOT icon-only like Discord
 - Server settings gear icon appears on hover over server name in channel sidebar header
 - `mockData.js` still exists in `src/data/` but nothing imports it (orphan file, safe to delete later)
+- Login form uses `noValidate` to suppress browser-native validation messages
 
 **Why:** User wanted unique non-Discord UI, light theme, clean editorial feel
 
@@ -42,23 +49,16 @@ All stored in DB user object and returned from `/api/users/me`:
 - `bannerColor` — fallback banner color
 - `status` — online | idle | dnd | offline
 
-## Server Settings Fields
-
-- `iconUrl`, `iconColor` — server icon (URL or color + acronym)
-- `description` — short server description
-- `bannerUrl`, `bannerColor` — server banner
-
 ## Roles System
 
-- Per-server roles stored in `db.roles` Map: `serverId → Role[]`
-- Each role: `{ id, name, color, hoist, position, permissions[], isDefault, createdAt }`
-- `@everyone` role auto-created when server is created (isDefault: true)
-- `db.memberRoles` Map: `${serverId}_${userId}` → roleId[]
+- Per-server roles in `roles` table: columns `id, server_id, name, color, hoist, position, permissions (TEXT[]), is_default, created_at`
+- `@everyone` role auto-created when server is created (is_default: true)
+- `member_roles` table: `(server_id, user_id, role_id)` composite PK
 - Valid permissions: `administrator, manage_server, manage_roles, manage_channels, kick_members, ban_members, manage_messages, send_messages, read_messages`
 
 ## Invites System
 
-- `db.invites` Map: `code → { id, code, serverId, inviterId, uses, maxUses, expiresAt, createdAt }`
+- `invites` table: `id, code, server_id, inviter_id, uses, max_uses, expires_at, created_at`
 - Invite codes are 8-char uppercase alphanumeric
 - Join URL pattern: `{origin}/invite/{CODE}`
 - Each inviter gets one reused invite per server (idempotent `POST /api/servers/:id/invites`)
@@ -80,3 +80,8 @@ All stored in DB user object and returned from `/api/users/me`:
 
 - `express-rate-limit` v7 `keyGenerator` that uses `req.ip` will throw `ERR_ERL_KEY_GEN_IPV6` validation error
 - Use default keyGenerator (no custom one) unless you need per-user limiting — the default handles IPv6 correctly
+
+## API Client (frontend)
+
+- `src/lib/api.js` checks `content-type` header before calling `res.json()` — returns "Server is starting up" message if HTML is received instead of JSON
+- This prevents "doctype is not valid JSON" / "string did not match expected pattern" errors on all browsers
