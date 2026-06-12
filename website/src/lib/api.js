@@ -53,6 +53,8 @@ export const api = {
     request(`/servers/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }),
   deleteServer: (id) => request(`/servers/${id}`, { method: 'DELETE' }),
   leaveServer: (id) => request(`/servers/${id}/leave`, { method: 'POST' }),
+  discoverServers: (q = '') => request(`/servers/discover?q=${encodeURIComponent(q)}`),
+  joinPublicServer: (id) => request(`/servers/${id}/join-public`, { method: 'POST' }),
 
   // Members
   kickMember: (serverId, userId) =>

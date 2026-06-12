@@ -2,11 +2,21 @@ import { Router } from 'express'
 import {
   createServer, getUserServers, deleteServer, getServerWithChannels, updateServer, leaveServer,
   kickMember, getRoles, createRole, updateRole, deleteRole, assignRole, removeRole,
-  createInvite, getServerInvites, deleteInvite,
+  createInvite, getServerInvites, deleteInvite, discoverServers, joinPublicServer,
 } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
+
+// ─── Discovery (public, no auth required) ─────────────────────────────────────
+router.get('/discover', async (req, res) => {
+  try {
+    const { q = '', limit = '50', offset = '0' } = req.query
+    const servers = await discoverServers({ query: q, limit: parseInt(limit), offset: parseInt(offset) })
+    res.json(servers)
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
 router.use(requireAuth)
 
 // ─── Servers ──────────────────────────────────────────────────────────────────
@@ -43,6 +53,11 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/leave', async (req, res) => {
   try { await leaveServer(req.params.id, req.user.id); res.status(204).send() }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.post('/:id/join-public', async (req, res) => {
+  try { res.json(await joinPublicServer(req.params.id, req.user.id)) }
   catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })
 

@@ -261,6 +261,11 @@ export async function updateServer(serverId, userId, fields) {
     values.push(val)
   }
 
+  if ('isPublic' in fields) {
+    setClauses.push(`is_public = $${idx++}`)
+    values.push(Boolean(fields.isPublic))
+  }
+
   if (!setClauses.length) return server
   values.push(serverId)
   const { rows: [updated] } = await pool.query(
@@ -270,8 +275,51 @@ export async function updateServer(serverId, userId, fields) {
   return {
     id: updated.id, name: updated.name, iconUrl: updated.icon_url, iconColor: updated.icon_color,
     description: updated.description, bannerUrl: updated.banner_url, bannerColor: updated.banner_color,
-    ownerId: updated.owner_id, createdAt: updated.created_at,
+    ownerId: updated.owner_id, createdAt: updated.created_at, isPublic: updated.is_public,
   }
+}
+
+export async function discoverServers({ query = '', limit = 50, offset = 0 } = {}) {
+  const search = `%${query.toLowerCase()}%`
+  const { rows } = await pool.query(
+    `SELECT s.id, s.name, s.icon_url, s.icon_color, s.description, s.banner_url, s.banner_color, s.is_public,
+            COUNT(sm.user_id)::int AS member_count
+     FROM servers s
+     LEFT JOIN server_members sm ON sm.server_id = s.id
+     WHERE s.is_public = true AND (lower(s.name) LIKE $1 OR lower(COALESCE(s.description,'')) LIKE $1)
+     GROUP BY s.id
+     ORDER BY member_count DESC, s.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [search, limit, offset]
+  )
+  return rows.map(s => ({
+    id: s.id, name: s.name, iconUrl: s.icon_url, iconColor: s.icon_color,
+    description: s.description, bannerUrl: s.banner_url, bannerColor: s.banner_color,
+    isPublic: s.is_public, memberCount: s.member_count,
+  }))
+}
+
+export async function joinPublicServer(serverId, userId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (!server.is_public) throw Object.assign(new Error('This server is not public'), { status: 403 })
+
+  const { rows: [existing] } = await pool.query(
+    'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, userId]
+  )
+  if (existing) return getServerWithChannels(serverId, userId)
+
+  await pool.query('INSERT INTO server_members (server_id, user_id) VALUES ($1,$2)', [serverId, userId])
+  const { rows: [defaultRole] } = await pool.query(
+    'SELECT id FROM roles WHERE server_id=$1 AND is_default=true', [serverId]
+  )
+  if (defaultRole) {
+    await pool.query(
+      'INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [serverId, userId, defaultRole.id]
+    )
+  }
+  return getServerWithChannels(serverId, userId)
 }
 
 export async function getUserServers(userId) {

@@ -1,14 +1,18 @@
 import { useState } from 'react'
-import { X, Hash, Users, ArrowRight } from 'lucide-react'
+import { X, Hash, Users, ArrowRight, Compass } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useNavigate } from 'react-router-dom'
+import ServerDiscoveryModal from './ServerDiscoveryModal.jsx'
 
 export default function CreateServerModal({ onClose }) {
   const [step, setStep] = useState('choose')
+  const [showDiscover, setShowDiscover] = useState(false)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const { createServer } = useServers()
   const navigate = useNavigate()
+
+  if (showDiscover) return <ServerDiscoveryModal onClose={onClose} />
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -62,6 +66,19 @@ export default function CreateServerModal({ onClose }) {
                   <div className="text-left">
                     <div className="font-semibold text-[#1A1B1E] text-sm">Join a server</div>
                     <div className="text-[#96989D] text-xs">Enter an invite link</div>
+                  </div>
+                </div>
+                <ArrowRight size={15} className="text-[#96989D] group-hover:text-[#5C6068] transition-colors" />
+              </button>
+              <button onClick={() => setShowDiscover(true)}
+                className="w-full flex items-center justify-between bg-[#F7F8FA] hover:bg-[#F2F3F5] border border-[#E3E5E8] px-4 py-4 rounded-xl transition-colors group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                    <Compass size={18} className="text-green-600" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-[#1A1B1E] text-sm">Browse public servers</div>
+                    <div className="text-[#96989D] text-xs">Discover communities to join</div>
                   </div>
                 </div>
                 <ArrowRight size={15} className="text-[#96989D] group-hover:text-[#5C6068] transition-colors" />

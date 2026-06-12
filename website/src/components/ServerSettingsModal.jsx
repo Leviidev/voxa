@@ -115,6 +115,7 @@ function OverviewTab({ server, isOwner, onUpdated }) {
     description: server?.description ?? '',
     bannerColor: server?.bannerColor ?? '',
     bannerUrl: server?.bannerUrl ?? '',
+    isPublic: server?.isPublic ?? false,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -178,6 +179,23 @@ function OverviewTab({ server, isOwner, onUpdated }) {
           className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D] resize-none transition-all disabled:opacity-60"
         />
       </div>
+
+      {isOwner && (
+        <div className="flex items-center justify-between bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-[#1A1B1E]">Public server</div>
+            <div className="text-xs text-[#96989D] mt-0.5">Anyone can find and join without an invite</div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.isPublic}
+            onClick={() => setForm(f => ({ ...f, isPublic: !f.isPublic }))}
+            className={`relative flex items-center w-11 h-6 rounded-full transition-colors shrink-0 focus:outline-none ${form.isPublic ? 'bg-[#E53935]' : 'bg-[#E3E5E8]'}`}>
+            <span className={`absolute w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${form.isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      )}
 
       {isOwner && (
         <button onClick={save} disabled={saving}
