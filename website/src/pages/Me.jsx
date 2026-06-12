@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
@@ -300,6 +300,14 @@ function AccountSettings({ user, onEditProfile }) {
 
       <TwoFactorSection user={user} />
       <PasskeySection />
+
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#96989D]">Login History</span>
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+      </div>
+
+      <LoginHistorySection />
     </div>
   )
 }
@@ -563,6 +571,93 @@ function PasskeySection() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Login History ────────────────────────────────────────────────────────────
+
+const METHOD_META = {
+  password: { label: 'Password login', Icon: Lock, color: 'text-[#5C6068]', bg: 'bg-[#EAEBEE]' },
+  '2fa':    { label: 'Two-factor login', Icon: ShieldCheck, color: 'text-green-600', bg: 'bg-green-100' },
+  passkey:  { label: 'Passkey login', Icon: KeyRound, color: 'text-[#6366F1]', bg: 'bg-indigo-100' },
+  register: { label: 'Account created', Icon: CheckCircle2, color: 'text-[#E53935]', bg: 'bg-red-50' },
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = now - d
+  if (diff < 60000) return 'Just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function LoginHistorySection() {
+  const [history, setHistory] = useState(null)
+
+  useEffect(() => {
+    api.getLoginHistory().then(setHistory).catch(() => setHistory([]))
+  }, [])
+
+  return (
+    <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Clock size={15} className="text-[#5C6068]" />
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D]">Recent sign-ins</div>
+          <div className="text-xs text-[#5C6068] mt-0.5">Last 20 logins to your account</div>
+        </div>
+      </div>
+
+      {history === null ? (
+        <div className="text-xs text-[#96989D]">Loading…</div>
+      ) : history.length === 0 ? (
+        <div className="text-xs text-[#96989D]">No login history yet.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {history.map((entry, i) => {
+            const meta = METHOD_META[entry.method] ?? METHOD_META.password
+            const { Icon, color, bg, label } = meta
+            return (
+              <div key={entry.id}
+                className={clsx(
+                  'flex items-center gap-3 bg-white border border-[#E3E5E8] rounded-xl px-3 py-2.5',
+                  i === 0 && 'ring-1 ring-[#E53935]/20'
+                )}>
+                <div className={clsx('w-7 h-7 rounded-full flex items-center justify-center shrink-0', bg)}>
+                  <Icon size={13} className={color} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[#1A1B1E]">{label}</span>
+                    {i === 0 && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#E53935] bg-red-50 px-1.5 py-0.5 rounded-md">Latest</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {entry.device && (
+                      <span className="text-xs text-[#96989D] flex items-center gap-1">
+                        <Smartphone size={10} className="shrink-0" />{entry.device}
+                      </span>
+                    )}
+                    {entry.ip && (
+                      <span className="text-xs text-[#96989D] flex items-center gap-1">
+                        <Globe size={10} className="shrink-0" />{entry.ip}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-xs text-[#96989D] shrink-0 text-right">
+                  {fmtDate(entry.createdAt)}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

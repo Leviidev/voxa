@@ -1,7 +1,8 @@
 import { Router } from 'express'
-import { createUser, verifyUser, getUserById, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification } from '../db.js'
+import { createUser, verifyUser, getUserById, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification, recordLoginHistory } from '../db.js'
 import { signToken, signTempToken, requireAuth } from '../middleware/auth.js'
 import { sendPasswordResetEmail, sendVerificationEmail } from '../email.js'
+import { parseDevice, parseIp } from '../utils.js'
 
 const router = Router()
 
@@ -37,6 +38,11 @@ router.post('/login', async (req, res) => {
     }
 
     const token = signToken({ id: user.id })
+    recordLoginHistory(user.id, {
+      method: 'password',
+      ip: parseIp(req),
+      device: parseDevice(req.headers['user-agent']),
+    }).catch(() => {})
     res.json({ token, user })
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })

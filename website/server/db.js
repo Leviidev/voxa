@@ -1025,3 +1025,39 @@ export async function getAndDeleteChallenge(sessionKey) {
   )
   return rows[0] ?? null
 }
+
+// ─── Login History ─────────────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS login_history (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    method TEXT NOT NULL,
+    ip TEXT,
+    device TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(err => console.error('login_history table init failed:', err.message))
+
+export async function recordLoginHistory(userId, { method, ip, device }) {
+  await pool.query(
+    'INSERT INTO login_history (user_id, method, ip, device) VALUES ($1, $2, $3, $4)',
+    [userId, method, ip ?? null, device ?? null]
+  )
+}
+
+export async function getLoginHistory(userId, limit = 20) {
+  const { rows } = await pool.query(
+    `SELECT id, method, ip, device, created_at
+     FROM login_history WHERE user_id = $1
+     ORDER BY created_at DESC LIMIT $2`,
+    [userId, limit]
+  )
+  return rows.map(r => ({
+    id: r.id,
+    method: r.method,
+    ip: r.ip,
+    device: r.device,
+    createdAt: r.created_at,
+  }))
+}

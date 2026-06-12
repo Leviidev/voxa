@@ -10,6 +10,7 @@ import {
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server'
 import { signToken, signTempToken, verifyTempToken, requireAuth } from '../middleware/auth.js'
+import { parseDevice, parseIp } from '../utils.js'
 import {
   getUserWithSecurity,
   setTotpSecret,
@@ -26,6 +27,8 @@ import {
   saveChallenge,
   getAndDeleteChallenge,
   getUserById,
+  recordLoginHistory,
+  getLoginHistory,
 } from '../db.js'
 
 const router = Router()
@@ -135,7 +138,20 @@ router.post('/2fa/verify', async (req, res) => {
 
     const token = signToken({ id: user.id })
     const pub = await getUserById(user.id)
+    recordLoginHistory(user.id, {
+      method: '2fa',
+      ip: parseIp(req),
+      device: parseDevice(req.headers['user-agent']),
+    }).catch(() => {})
     res.json({ token, user: pub })
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+// ─── Login history ────────────────────────────────────────────────────────────
+
+router.get('/login-history', requireAuth, async (req, res) => {
+  try {
+    res.json(await getLoginHistory(req.user.id, 20))
   } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })
 
@@ -256,6 +272,11 @@ router.post('/passkey/authenticate', async (req, res) => {
     await updatePasskeyCounter(passkey.id, verification.authenticationInfo.newCounter)
     const token = signToken({ id: passkey.user_id })
     const user = await getUserById(passkey.user_id)
+    recordLoginHistory(passkey.user_id, {
+      method: 'passkey',
+      ip: parseIp(req),
+      device: parseDevice(req.headers['user-agent']),
+    }).catch(() => {})
     res.json({ token, user })
   } catch (err) {
     console.error('Passkey auth error:', err)

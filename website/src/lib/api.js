@@ -128,6 +128,7 @@ export const api = {
   passkeyAuthenticate: (sessionKey, response) =>
     request('/auth/passkey/authenticate', { method: 'POST', body: JSON.stringify({ sessionKey, response }) }),
   deletePasskey: (id) => request(`/auth/passkey/${id}`, { method: 'DELETE' }),
+  getLoginHistory: () => request('/auth/login-history'),
 
   // Unread
   getUnread: () => request('/unread'),
