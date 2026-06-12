@@ -4,6 +4,12 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import rateLimit from 'express-rate-limit'
 import jwt from 'jsonwebtoken'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { existsSync } from 'fs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const DIST_DIR = join(__dirname, '../dist')
 import authRoutes from './routes/auth.js'
 import serverRoutes from './routes/servers.js'
 import channelRoutes from './routes/channels.js'
@@ -162,6 +168,15 @@ app.use('/api/servers', serverRoutes)
 app.use('/api/channels', channelRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/invites', inviteRoutes)
+
+// ─── Static Frontend (production) ─────────────────────────────────────────────
+if (existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR))
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next()
+    res.sendFile(join(DIST_DIR, 'index.html'))
+  })
+}
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {

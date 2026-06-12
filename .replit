@@ -59,9 +59,10 @@ localPort = 5001
 externalPort = 3001
 
 [deployment]
-deploymentTarget = "static"
-build = ["bash", "-c", "cd website && npm run build"]
+deploymentTarget = "vm"
+build = ["bash", "-c", "cd website && npm install && npm run build"]
 publicDir = "website/dist"
+run = ["bash", "-c", "cd website && node server/index.js"]
 
 [userenv]
 
