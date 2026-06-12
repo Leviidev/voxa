@@ -111,6 +111,24 @@ export const api = {
   resendVerification: () =>
     request('/auth/resend-verification', { method: 'POST' }),
 
+  // 2FA / TOTP
+  get2FAStatus: () => request('/auth/2fa/status'),
+  setup2FA: () => request('/auth/2fa/setup', { method: 'POST' }),
+  enable2FA: (code) => request('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) }),
+  disable2FA: (code) => request('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }),
+  verify2FA: (tempToken, code) =>
+    request('/auth/2fa/verify', { method: 'POST', body: JSON.stringify({ tempToken, code }) }),
+
+  // Passkeys
+  listPasskeys: () => request('/auth/passkey/list'),
+  passkeyRegisterOptions: () => request('/auth/passkey/register-options', { method: 'POST' }),
+  passkeyRegister: (sessionKey, response, deviceName) =>
+    request('/auth/passkey/register', { method: 'POST', body: JSON.stringify({ sessionKey, response, deviceName }) }),
+  passkeyAuthOptions: () => request('/auth/passkey/authenticate-options', { method: 'POST' }),
+  passkeyAuthenticate: (sessionKey, response) =>
+    request('/auth/passkey/authenticate', { method: 'POST', body: JSON.stringify({ sessionKey, response }) }),
+  deletePasskey: (id) => request(`/auth/passkey/${id}`, { method: 'DELETE' }),
+
   // Unread
   getUnread: () => request('/unread'),
   markChannelRead: (channelId) => request(`/channels/${channelId}/read`, { method: 'POST' }),

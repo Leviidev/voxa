@@ -37,6 +37,7 @@ function publicUser(u) {
     status: rest.status,
     createdAt: rest.created_at,
     emailVerified: rest.email_verified ?? false,
+    totpEnabled: rest.totp_enabled ?? false,
   }
 }
 
@@ -889,4 +890,138 @@ export async function useEmailVerification(token) {
   if (!rows[0]) { const e = new Error('Invalid or expired verification link'); e.status = 400; throw e }
   await pool.query(`UPDATE users SET email_verified=TRUE WHERE id=$1`, [rows[0].user_id])
   await pool.query(`DELETE FROM email_verifications WHERE token=$1`, [token])
+}
+
+// ─── 2FA / TOTP ───────────────────────────────────────────────────────────────
+
+export async function getUserWithSecurity(id) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id])
+  if (!rows.length) return null
+  const u = rows[0]
+  return {
+    ...publicUser(u),
+    email: u.email,
+    totpSecret: u.totp_secret,
+  }
+}
+
+export async function setTotpSecret(userId, secret) {
+  await pool.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, userId])
+}
+
+export async function enableTotp(userId) {
+  await pool.query('UPDATE users SET totp_enabled = TRUE WHERE id = $1', [userId])
+}
+
+export async function disableTotp(userId) {
+  await pool.query('UPDATE users SET totp_enabled = FALSE, totp_secret = NULL WHERE id = $1', [userId])
+  await pool.query('DELETE FROM totp_backup_codes WHERE user_id = $1', [userId])
+}
+
+export async function createBackupCodes(userId, hashedCodes) {
+  await pool.query('DELETE FROM totp_backup_codes WHERE user_id = $1', [userId])
+  for (const code of hashedCodes) {
+    await pool.query(
+      'INSERT INTO totp_backup_codes (user_id, code_hash) VALUES ($1, $2)',
+      [userId, code]
+    )
+  }
+}
+
+export async function verifyAndConsumeBackupCode(userId, code) {
+  const { rows } = await pool.query(
+    'SELECT * FROM totp_backup_codes WHERE user_id = $1 AND used = FALSE',
+    [userId]
+  )
+  for (const row of rows) {
+    const match = await bcrypt.compare(code, row.code_hash)
+    if (match) {
+      await pool.query('UPDATE totp_backup_codes SET used = TRUE WHERE id = $1', [row.id])
+      return true
+    }
+  }
+  return false
+}
+
+// ─── Passkeys ─────────────────────────────────────────────────────────────────
+
+export async function getPasskeys(userId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM passkeys WHERE user_id = $1 ORDER BY created_at DESC',
+    [userId]
+  )
+  return rows.map(r => ({
+    id: r.id,
+    credentialId: r.credential_id,
+    deviceName: r.device_name ?? 'Passkey',
+    createdAt: r.created_at,
+    lastUsed: r.last_used,
+  }))
+}
+
+export async function savePasskey(userId, { credentialId, publicKey, counter, deviceName, transports }) {
+  const { rows } = await pool.query(
+    `INSERT INTO passkeys (user_id, credential_id, public_key, counter, device_name, transports)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [userId, credentialId, publicKey, counter, deviceName, transports]
+  )
+  return rows[0]
+}
+
+export async function getPasskeyByCredentialId(credentialId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM passkeys WHERE credential_id = $1',
+    [credentialId]
+  )
+  return rows[0] ?? null
+}
+
+export async function updatePasskeyCounter(id, counter) {
+  await pool.query(
+    'UPDATE passkeys SET counter = $1, last_used = NOW() WHERE id = $2',
+    [counter, id]
+  )
+}
+
+export async function removePasskey(userId, passkeyId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM passkeys WHERE id = $1 AND user_id = $2',
+    [passkeyId, userId]
+  )
+  if (!rowCount) {
+    const e = new Error('Passkey not found')
+    e.status = 404
+    throw e
+  }
+}
+
+export async function getUserPasskeyCredentialIds(userId) {
+  const { rows } = await pool.query(
+    'SELECT credential_id FROM passkeys WHERE user_id = $1',
+    [userId]
+  )
+  return rows.map(r => r.credential_id)
+}
+
+// ─── WebAuthn Challenges ──────────────────────────────────────────────────────
+
+export async function saveChallenge(sessionKey, challenge, type, userId = null) {
+  await pool.query(
+    'DELETE FROM webauthn_challenges WHERE created_at < NOW() - INTERVAL \'5 minutes\''
+  )
+  await pool.query('DELETE FROM webauthn_challenges WHERE session_key = $1', [sessionKey])
+  await pool.query(
+    'INSERT INTO webauthn_challenges (session_key, challenge, type, user_id) VALUES ($1,$2,$3,$4)',
+    [sessionKey, challenge, type, userId]
+  )
+}
+
+export async function getAndDeleteChallenge(sessionKey) {
+  const { rows } = await pool.query(
+    `DELETE FROM webauthn_challenges
+     WHERE session_key = $1 AND created_at > NOW() - INTERVAL '5 minutes'
+     RETURNING *`,
+    [sessionKey]
+  )
+  return rows[0] ?? null
 }

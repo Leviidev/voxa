@@ -9,22 +9,34 @@ description: Key architecture decisions, design system, and deployment notes for
 - **Frontend**: React + Vite, port 5000. Workflow: "Start application" → `cd website && npm run dev`
 - **API**: Express in `website/server/`, port 3001. Workflow: "API Server" → `cd website && npm run api`
 - **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`)
-- **API routes**: `/api/auth/*`, `/api/users/*`, `/api/servers/*`, `/api/channels/*`, `/api/messages/*`, `/api/invites/*`, `/api/dms/*`
-- **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, JWT_SECRET stored as env var, tokens stored in localStorage as `voxa_token`
+- **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, JWT_SECRET stored as Replit secret, tokens stored in localStorage as `voxa_token`
 - **Persistence**: Replit PostgreSQL via `pg` Pool (`DATABASE_URL` env var). All db.js functions are async — all route handlers must use `async/await`.
 - **Rate limiting**: express-rate-limit — auth: 8/15min, general: 200/5min, messages: 30/min
 
 ## Database Schema (PostgreSQL)
 
-Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`
 - Snake_case columns in DB; camelCase in API responses (mapped in db.js)
 - All `db.js` functions return Promises — every route handler must `await` them
 
-**Key messages quirk:** The `messages` table stores denormalized author info (`author`, `display_name`, `avatar_url`, `avatar_color`, `discriminator`, `timestamp`, `edited`, `parent_id`) — NOT just a foreign key. db.js INSERTs copy these from users table at message creation time.
+**Key messages quirk:** The `messages` table stores denormalized author info (`author`, `display_name`, `avatar_url`, `avatar_color`, `discriminator`, `timestamp`, `edited`, `parent_id`) — NOT just a foreign key.
+
+**users table security columns:** `email_verified BOOLEAN`, `totp_secret TEXT`, `totp_enabled BOOLEAN`
 
 ## Deployment
 
-Configured as **VM** (not static, not autoscale) — required for WebSocket persistence. Build: `cd website && npm install && npm run build`. Run: `cd website && node server/index.js`. The Express server serves the built React app from `website/dist/` (static middleware + catch-all to `index.html`).
+Configured as **VM** (not static, not autoscale) — required for WebSocket persistence. Build: `cd website && npm install && npm run build`. Run: `cd website && node server/index.js`. The Express server serves the built React app from `website/dist/` (static middleware + catch-all to `index.html`). Server uses `process.env.PORT || process.env.API_PORT || 3001`.
+
+**No "Made with Replit" badge on deployed apps.** Only appears in dev preview in some contexts.
+
+## Security Features
+
+- **Email verification**: `email_verifications` table, tokens expire 24h. Banner shown in Me.jsx for unverified users.
+- **Password reset**: `password_resets` table, tokens expire 1h. Emails sent via Resend from `noreply@voxa.lol`.
+- **2FA (TOTP)**: `otplib` package. Routes at `/api/auth/2fa/*`. Setup generates QR code + secret; enable verifies code + returns 8 backup codes. Login gate: returns `{ requires2FA: true, tempToken }` (5-min JWT with `_temp: true`); frontend shows code input step. **otplib ESM imports**: use `{ generateSecret, generateURI, generateSync, verifySync }` from `'otplib'` — NOT `{ authenticator }` (named export doesn't exist in ESM).
+- **Passkeys (WebAuthn)**: `@simplewebauthn/server` v10 + `@simplewebauthn/browser` v10. Routes at `/api/auth/passkey/*`. Challenges stored in `webauthn_challenges` table with 5-min TTL. RP ID derived dynamically from request origin hostname. `startRegistration`/`startAuthentication` called with `{ optionsJSON: options }` in browser v10.
+- **Temp tokens**: `signTempToken` / `verifyTempToken` in `middleware/auth.js`; `requireAuth` rejects tokens with `_temp: true`.
+- **Security routes**: `website/server/routes/security.js` — mounted at `/api/auth` in `index.js`.
 
 ## Design System (Light Theme)
 
@@ -37,87 +49,28 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 ## Key Design Decisions
 
 - Server sidebar (220px) shows server **names** as full rows — intentionally NOT icon-only like Discord
-- Server settings gear icon appears on hover over server name in channel sidebar header
-- `mockData.js` still exists in `src/data/` but nothing imports it (orphan file, safe to delete later)
 - Login form uses `noValidate` to suppress browser-native validation messages
-
-**Why:** User wanted unique non-Discord UI, light theme, clean editorial feel
-
-## User Profile Fields
-
-All stored in DB user object and returned from `/api/users/me`:
-- `displayName` — overrides username in chat
-- `bio` — short bio text (190 char max)
-- `customStatus` — shown below username in user panel
-- `avatarUrl` — image URL (optional; fallback to color circle)
-- `avatarColor` — hex color for avatar circle
-- `bannerUrl` — profile banner image URL
-- `bannerColor` — fallback banner color
-- `status` — online | idle | dnd | offline
-
-## Roles System
-
-- Per-server roles in `roles` table: columns `id, server_id, name, color, hoist, position, permissions (TEXT[]), is_default, created_at`
-- `@everyone` role auto-created when server is created (is_default: true)
-- `member_roles` table: `(server_id, user_id, role_id)` composite PK
-- Valid permissions: `administrator, manage_server, manage_roles, manage_channels, kick_members, ban_members, manage_messages, send_messages, read_messages`
-
-## Invites System
-
-- `invites` table: `id, code, server_id, inviter_id, uses, max_uses, expires_at, created_at`
-- Invite codes are 8-char uppercase alphanumeric
-- Join URL pattern: `{origin}/invite/{CODE}`
-- Each inviter gets one reused invite per server (idempotent `POST /api/servers/:id/invites`)
-- Frontend route: `/invite/:code` → `InviteJoin.jsx` page
-
-## DM (Direct Messages) Feature
-
-- Tables: `dm_channels` (conversation), `dm_participants` (who's in it), `dm_messages`
-- Routes: `GET/POST /api/dms`, `GET/POST/PATCH/DELETE /api/dms/:dmId/messages/:msgId`
-- Open a DM by userId OR username (looks up via `findUserByUsername`)
-- Socket room: `dm:{dmChannelId}` — join/leave via `dm:join` / `dm:leave` events
-- Socket events: `dm:message:new`, `dm:message:edit`, `dm:message:delete`
-- Frontend: DM list in `ChannelSidebar.jsx` (when no server selected), chat in `DmChat.jsx`
-- Route: `/voxa/me/dms/:dmId`
-
-## Key UI Components
-
-- `ProfileEditModal.jsx` — tabbed modal (General, Avatar, Banner); opened from Me.jsx edit button or Settings → Edit Profile
-- `ServerSettingsModal.jsx` — tabbed modal (Overview, Roles, Members, Invites, Danger Zone); opened from hover gear icon on channel sidebar server header
-- `InviteJoin.jsx` — standalone page at `/invite/:code` for joining via invite link
-- `DmChat.jsx` — DM conversation view with real-time messages, edit/delete, and socket integration
+- `mockData.js` still exists in `src/data/` but nothing imports it (orphan file, safe to delete later)
 
 ## Express 5 Quirk
 
-- Express 5 (installed) uses `path-to-regexp` v8 which rejects `/api/*` and `/api/(.*)` wildcards in `app.use()`
+- Express 5 uses `path-to-regexp` v8 which rejects `/api/*` wildcards in `app.use()`
 - Use a plain middleware with `req.path.startsWith('/api/')` check for catch-all routes
-- **Why:** Breaking change from Express 4 path handling
 
 ## Rate Limiting Note
 
-- `express-rate-limit` v7 `keyGenerator` that uses `req.ip` will throw `ERR_ERL_KEY_GEN_IPV6` validation error
-- Use default keyGenerator (no custom one) unless you need per-user limiting — the default handles IPv6 correctly
+- `express-rate-limit` v7 `keyGenerator` that uses `req.ip` will throw `ERR_ERL_KEY_GEN_IPV6`
+- Use default keyGenerator (no custom one)
 
 ## Real-time (Socket.IO)
 
-- Server: `socket.io` on the same HTTP server as Express (`createServer(app)` + `httpServer.listen`)
+- Server: `socket.io` on the same HTTP server as Express
 - Vite proxies `/socket.io` → `http://localhost:3001` with `ws: true`
-- Client singleton in `src/lib/socket.js` — call `getSocket(token)` once; reconnects automatically
-- `SocketContext.jsx` wraps the app (inside AuthProvider); provides `{ socket, connected }`
-- Channel rooms: `ch:{channelId}` — join on channel mount, leave on unmount
-- Socket events: `message:new`, `message:edit`, `message:delete`, `reaction:update`, `typing:update`
-- Typing: `typing:start { channelId, username }` / `typing:stop { channelId }` — server auto-clears after 4s
-- Route handlers emit to `req.app.locals.io`
-
-## Reactions
-
-- `message_reactions` table: `(message_id, user_id, emoji)` composite PK
-- Toggle endpoint: `POST /api/messages/:msgId/reactions { emoji }` — adds or removes
-- `getMessages` query uses correlated subquery to attach reactions as `jsonb_object_agg`
-- `reaction:update` socket event carries `{ messageId, channelId, reactions }` — full reactions map
-- Quick-pick bar: 8 common emojis on hover; highlighted pill if current user reacted
+- Client singleton in `src/lib/socket.js` — call `getSocket(token)` once
+- Channel rooms: `ch:{channelId}`, DM rooms: `dm:{dmId}`, Server rooms: `srv:{serverId}`
+- Typing: `typing:start` / `typing:stop` — server auto-clears after 4s
 
 ## API Client (frontend)
 
-- `src/lib/api.js` checks `content-type` header before calling `res.json()` — returns "Server is starting up" message if HTML is received instead of JSON
-- This prevents "doctype is not valid JSON" / "string did not match expected pattern" errors on all browsers
+- `src/lib/api.js` checks `content-type` header before calling `res.json()` — prevents "doctype is not valid JSON" errors
+- `api.login()` can return `{ requires2FA: true, tempToken }` — frontend must handle this case in Login.jsx

@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import { createUser, verifyUser, getUserById, getUserByEmail, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification } from '../db.js'
-import { signToken, requireAuth } from '../middleware/auth.js'
+import { createUser, verifyUser, getUserById, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification } from '../db.js'
+import { signToken, signTempToken, requireAuth } from '../middleware/auth.js'
 import { sendPasswordResetEmail, sendVerificationEmail } from '../email.js'
 
 const router = Router()
@@ -28,6 +28,14 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
     const user = await verifyUser(email, password)
+
+    // Check if 2FA is required
+    const secUser = await getUserWithSecurity(user.id)
+    if (secUser?.totpEnabled) {
+      const tempToken = signTempToken({ id: user.id })
+      return res.json({ requires2FA: true, tempToken })
+    }
+
     const token = signToken({ id: user.id })
     res.json({ token, user })
   } catch (err) {

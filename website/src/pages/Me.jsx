@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
@@ -276,19 +276,12 @@ function AccountSettings({ user, onEditProfile }) {
       ))}
       <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={clsx(
-            'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-            user?.emailVerified ? 'bg-green-100' : 'bg-amber-100'
-          )}>
-            {user?.emailVerified
-              ? <CheckCircle2 size={16} className="text-green-600" />
-              : <Mail size={16} className="text-amber-500" />}
+          <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center shrink-0', user?.emailVerified ? 'bg-green-100' : 'bg-amber-100')}>
+            {user?.emailVerified ? <CheckCircle2 size={16} className="text-green-600" /> : <Mail size={16} className="text-amber-500" />}
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-0.5">Email verification</div>
-            <div className="text-[#1A1B1E] text-sm font-medium">
-              {user?.emailVerified ? 'Verified' : 'Not verified'}
-            </div>
+            <div className="text-[#1A1B1E] text-sm font-medium">{user?.emailVerified ? 'Verified' : 'Not verified'}</div>
           </div>
         </div>
         {!user?.emailVerified && (
@@ -298,6 +291,280 @@ function AccountSettings({ user, onEditProfile }) {
           </button>
         )}
       </div>
+
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#96989D]">Security</span>
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+      </div>
+
+      <TwoFactorSection user={user} />
+      <PasskeySection />
+    </div>
+  )
+}
+
+// ─── Two-Factor Authentication ─────────────────────────────────────────────────
+
+function TwoFactorSection({ user }) {
+  const [enabled, setEnabled] = useState(user?.totpEnabled ?? false)
+  const [step, setStep] = useState('idle') // idle | setup-qr | setup-codes | disable-confirm
+  const [setupData, setSetupData] = useState(null)
+  const [backupCodes, setBackupCodes] = useState(null)
+  const [code, setCode] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const startSetup = async () => {
+    setLoading(true); setError('')
+    try {
+      const data = await api.setup2FA()
+      setSetupData(data)
+      setStep('setup-qr')
+      setCode('')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const confirmEnable = async () => {
+    if (!code.trim()) return
+    setLoading(true); setError('')
+    try {
+      const data = await api.enable2FA(code.trim())
+      setBackupCodes(data.backupCodes)
+      setEnabled(true)
+      setStep('setup-codes')
+      setCode('')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const confirmDisable = async () => {
+    if (!code.trim()) return
+    setLoading(true); setError('')
+    try {
+      await api.disable2FA(code.trim())
+      setEnabled(false)
+      setStep('idle')
+      setCode('')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const cancel = () => { setStep('idle'); setCode(''); setError(''); setSetupData(null); setBackupCodes(null) }
+
+  const copyBackupCodes = () => {
+    navigator.clipboard.writeText(backupCodes.join('\n'))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const downloadBackupCodes = () => {
+    const blob = new Blob([backupCodes.join('\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'voxa-backup-codes.txt'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (step === 'setup-qr' && setupData) {
+    return (
+      <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Smartphone size={15} className="text-[#5C6068]" />
+          <span className="text-sm font-bold text-[#1A1B1E]">Set up authenticator app</span>
+        </div>
+        <p className="text-xs text-[#5C6068] leading-relaxed">
+          Scan the QR code with Google Authenticator, Authy, or any TOTP app. Then enter the 6-digit code to confirm.
+        </p>
+        <div className="flex justify-center">
+          <img src={setupData.qrCode} alt="QR Code" className="w-40 h-40 rounded-xl border border-[#E3E5E8] bg-white p-2" />
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1">Manual entry key</div>
+          <div className="font-mono text-xs bg-white border border-[#E3E5E8] rounded-xl px-3 py-2 text-[#1A1B1E] select-all break-all">{setupData.secret}</div>
+        </div>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1.5">Verification code</label>
+          <input type="text" value={code} onChange={e => setCode(e.target.value)}
+            placeholder="000 000" inputMode="numeric" maxLength={8}
+            className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] font-mono tracking-widest text-center" />
+        </div>
+        <div className="flex gap-2">
+          <button onClick={cancel} className="flex-1 py-2.5 rounded-xl border border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] text-sm font-medium transition-colors">Cancel</button>
+          <button onClick={confirmEnable} disabled={loading || !code.trim()}
+            className="flex-1 py-2.5 rounded-xl bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white text-sm font-bold transition-colors">
+            {loading ? 'Verifying…' : 'Enable 2FA'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'setup-codes' && backupCodes) {
+    return (
+      <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={15} className="text-green-600" />
+          <span className="text-sm font-bold text-[#1A1B1E]">2FA enabled! Save your backup codes</span>
+        </div>
+        <p className="text-xs text-[#5C6068] leading-relaxed">
+          Save these 8 backup codes somewhere safe. Each can be used once if you lose access to your authenticator app.
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {backupCodes.map(c => (
+            <div key={c} className="font-mono text-xs bg-white border border-[#E3E5E8] rounded-lg px-2.5 py-1.5 text-[#1A1B1E] text-center select-all">{c}</div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={copyBackupCodes}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] text-xs font-medium transition-colors">
+            <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
+          </button>
+          <button onClick={downloadBackupCodes}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] text-xs font-medium transition-colors">
+            <Download size={12} /> Download
+          </button>
+        </div>
+        <button onClick={cancel}
+          className="w-full py-2.5 rounded-xl bg-[#E53935] hover:bg-[#C62828] text-white text-sm font-bold transition-colors">
+          Done
+        </button>
+      </div>
+    )
+  }
+
+  if (step === 'disable-confirm') {
+    return (
+      <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <ShieldOff size={15} className="text-[#E53935]" />
+          <span className="text-sm font-bold text-[#1A1B1E]">Disable two-factor authentication</span>
+        </div>
+        <p className="text-xs text-[#5C6068]">Enter your current 6-digit code or a backup code to confirm.</p>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        <input type="text" value={code} onChange={e => setCode(e.target.value)}
+          placeholder="000 000 or backup code" inputMode="numeric" maxLength={12}
+          className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] font-mono tracking-widest text-center" />
+        <div className="flex gap-2">
+          <button onClick={cancel} className="flex-1 py-2.5 rounded-xl border border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] text-sm font-medium transition-colors">Cancel</button>
+          <button onClick={confirmDisable} disabled={loading || !code.trim()}
+            className="flex-1 py-2.5 rounded-xl bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white text-sm font-bold transition-colors">
+            {loading ? 'Disabling…' : 'Disable 2FA'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className={clsx('w-8 h-8 rounded-full flex items-center justify-center shrink-0', enabled ? 'bg-green-100' : 'bg-[#EAEBEE]')}>
+          {enabled ? <ShieldCheck size={16} className="text-green-600" /> : <Shield size={16} className="text-[#96989D]" />}
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-0.5">Two-factor authentication</div>
+          <div className="text-[#1A1B1E] text-sm font-medium">{enabled ? 'Enabled' : 'Disabled'}</div>
+        </div>
+      </div>
+      {enabled ? (
+        <button onClick={() => { setStep('disable-confirm'); setCode(''); setError('') }}
+          className="text-xs font-semibold text-[#E53935] hover:text-[#C62828] transition-colors shrink-0">
+          Disable
+        </button>
+      ) : (
+        <button onClick={startSetup} disabled={loading}
+          className="text-xs font-semibold text-[#E53935] hover:text-[#C62828] disabled:opacity-50 transition-colors shrink-0">
+          {loading ? 'Loading…' : 'Set up'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Passkeys ─────────────────────────────────────────────────────────────────
+
+function PasskeySection() {
+  const [passkeys, setPasskeys] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.listPasskeys().then(setPasskeys).catch(() => setPasskeys([]))
+  }, [])
+
+  const addPasskey = async () => {
+    setLoading(true); setError('')
+    try {
+      const { startRegistration } = await import('@simplewebauthn/browser')
+      const { options, sessionKey } = await api.passkeyRegisterOptions()
+      const response = await startRegistration({ optionsJSON: options })
+      const ua = navigator.userAgent
+      const deviceName = ua.includes('iPhone') ? 'iPhone' : ua.includes('iPad') ? 'iPad' :
+        ua.includes('Android') ? 'Android device' : ua.includes('Mac') ? 'Mac' :
+        ua.includes('Windows') ? 'Windows device' : 'Passkey'
+      await api.passkeyRegister(sessionKey, response, deviceName)
+      setPasskeys(await api.listPasskeys())
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') setError(e.message || 'Registration failed')
+    }
+    setLoading(false)
+  }
+
+  const remove = async (id) => {
+    try {
+      await api.deletePasskey(id)
+      setPasskeys(p => p.filter(pk => pk.id !== id))
+    } catch (e) { setError(e.message) }
+  }
+
+  return (
+    <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <KeyRound size={15} className="text-[#5C6068]" />
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D]">Passkeys</div>
+            <div className="text-xs text-[#5C6068] mt-0.5">Sign in without a password using Face ID, Touch ID, or a hardware key</div>
+          </div>
+        </div>
+        <button onClick={addPasskey} disabled={loading}
+          className="flex items-center gap-1 text-xs font-semibold text-[#E53935] hover:text-[#C62828] disabled:opacity-50 transition-colors shrink-0">
+          <Plus size={13} /> Add
+        </button>
+      </div>
+
+      {error && <p className="text-red-500 text-xs">{error}</p>}
+
+      {passkeys === null ? (
+        <div className="text-xs text-[#96989D]">Loading…</div>
+      ) : passkeys.length === 0 ? (
+        <div className="text-xs text-[#96989D]">No passkeys yet. Add one to sign in faster and more securely.</div>
+      ) : (
+        <div className="space-y-2">
+          {passkeys.map(pk => (
+            <div key={pk.id} className="flex items-center justify-between bg-white border border-[#E3E5E8] rounded-xl px-3 py-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <KeyRound size={14} className="text-[#96989D] shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-[#1A1B1E] truncate">{pk.deviceName}</div>
+                  <div className="text-xs text-[#96989D]">
+                    Added {new Date(pk.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {pk.lastUsed && ` · Last used ${new Date(pk.lastUsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => remove(pk.id)}
+                className="ml-2 p-1.5 rounded-lg text-[#96989D] hover:text-red-500 hover:bg-red-50 transition-colors shrink-0">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

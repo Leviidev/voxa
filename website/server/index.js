@@ -11,6 +11,7 @@ import { existsSync } from 'fs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DIST_DIR = join(__dirname, '../dist')
 import authRoutes from './routes/auth.js'
+import securityRoutes from './routes/security.js'
 import serverRoutes from './routes/servers.js'
 import channelRoutes from './routes/channels.js'
 import messageRoutes from './routes/messages.js'
@@ -173,6 +174,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)
+app.use('/api/auth', securityRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/servers', serverRoutes)
 app.use('/api/channels', channelRoutes)
