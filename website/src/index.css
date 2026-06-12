@@ -38,3 +38,34 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin 0.7s linear infinite; }
+
+/* ─── Dark Mode ───────────────────────────────────────────────────────────── */
+.dark body { background: #1E2124; color: #DCDDDE; }
+
+.dark .bg-white { background-color: #36393F !important; }
+.dark .bg-\[\#F7F8FA\] { background-color: #2C2F33 !important; }
+.dark .bg-\[\#F2F3F5\] { background-color: #23272A !important; }
+.dark .bg-\[\#E3E5E8\] { background-color: #2C2F33 !important; }
+.dark .bg-\[\#EAEBEE\] { background-color: #3C4043 !important; }
+.dark .bg-\[\#E0E2E6\] { background-color: #42464D !important; }
+.dark .bg-\[\#DADCDF\] { background-color: #3C4043 !important; }
+.dark .bg-\[\#D5D7DC\] { background-color: #40444B !important; }
+
+.dark .border-\[\#E3E5E8\] { border-color: #40444B !important; }
+.dark .border-\[\#D5D7DC\] { border-color: #40444B !important; }
+.dark .border-\[\#E0E2E6\] { border-color: #40444B !important; }
+
+.dark .text-\[\#1A1B1E\] { color: #DCDDDE !important; }
+.dark .text-\[\#313439\] { color: #DCDDDE !important; }
+.dark .text-\[\#5C6068\] { color: #B9BBBE !important; }
+.dark .text-\[\#96989D\] { color: #72767D !important; }
+
+.dark .hover\:bg-\[\#EAEBEE\]:hover { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#F2F3F5\]:hover { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#DADCDF\]:hover { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#D5D7DC\]:hover { background-color: #3C4043 !important; }
+.dark .hover\:text-\[\#1A1B1E\]:hover { color: #DCDDDE !important; }
+.dark .hover\:text-\[\#5C6068\]:hover { color: #B9BBBE !important; }
+
+.dark ::-webkit-scrollbar-thumb { background: #40444B; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #72767D; }

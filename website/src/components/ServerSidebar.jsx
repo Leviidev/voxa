@@ -110,26 +110,6 @@ export default function ServerSidebar() {
           </button>
         </div>
 
-        {/* User panel */}
-        {user && (
-          <div className="px-2 pb-3 shrink-0">
-            <div
-              onClick={() => navigate('/voxa/me')}
-              className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-[#E3E5E8] cursor-pointer hover:bg-[#DADCDF] transition-colors"
-            >
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                style={{ background: serverColor(user.username) }}
-              >
-                {user.username?.[0]?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[#1A1B1E] text-xs font-semibold truncate leading-tight">{user.username}</div>
-                <div className="text-[#96989D] text-[10px] truncate">#{user.discriminator}</div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {showCreate && <CreateServerModal onClose={() => setShowCreate(false)} />}

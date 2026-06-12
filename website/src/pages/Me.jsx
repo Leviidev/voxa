@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useNavigate } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
+import { useTheme } from '../context/ThemeContext.jsx'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
@@ -13,11 +14,12 @@ const friendTabs = ['Online', 'All', 'Add Friend']
 export default function Me() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('Online')
-  const [showSettings, setShowSettings] = useState(false)
+  const [showSettings, setShowSettings] = useState(searchParams.get('settings') === '1')
   const [showEditProfile, setShowEditProfile] = useState(false)
   const handleLogout = () => { logout(); navigate('/') }
-  if (showSettings) return <SettingsPanel user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} onEditProfile={() => { setShowSettings(false); setShowEditProfile(true) }} />
+  if (showSettings) return <SettingsPanel user={user} onClose={() => { setShowSettings(false); navigate('/voxa/me', { replace: true }) }} onLogout={handleLogout} onEditProfile={() => { setShowSettings(false); setShowEditProfile(true) }} />
   return (
     <div className="flex-1 flex overflow-hidden bg-white">
       {showEditProfile && <ProfileEditModal onClose={() => setShowEditProfile(false)} />}
@@ -688,17 +690,31 @@ function NotificationSettings() {
 }
 
 function AppearanceSettings() {
+  const { theme, setTheme } = useTheme()
   return (
     <div>
       <h3 className="font-semibold text-[#1A1B1E] mb-3 text-sm">Theme</h3>
       <div className="flex gap-3 flex-wrap">
-        {['Light', 'Dark', 'System'].map(t => (
-          <label key={t} className="flex items-center gap-2 bg-[#F7F8FA] border border-[#E3E5E8] px-4 py-3 rounded-xl cursor-pointer hover:bg-[#F2F3F5] transition-colors">
-            <input type="radio" name="theme" defaultChecked={t === 'Light'} className="accent-[#E53935]" />
-            <span className="text-sm text-[#1A1B1E]">{t}</span>
-          </label>
+        {[
+          { id: 'light', label: 'Light', icon: Sun },
+          { id: 'dark', label: 'Dark', icon: Moon },
+        ].map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setTheme(id)}
+            className={clsx(
+              'flex items-center gap-2.5 px-5 py-3.5 rounded-xl border-2 text-sm font-medium transition-all',
+              theme === id
+                ? 'border-[#E53935] bg-red-50 text-[#E53935]'
+                : 'border-[#E3E5E8] bg-[#F7F8FA] text-[#5C6068] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]'
+            )}>
+            <Icon size={16} />
+            {label}
+            {theme === id && <CheckCircle2 size={14} className="ml-1" />}
+          </button>
         ))}
       </div>
+      <p className="text-[#96989D] text-xs mt-3">
+        The theme applies immediately and is saved for your next visit.
+      </p>
     </div>
   )
 }

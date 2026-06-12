@@ -11,6 +11,7 @@ import VerifyEmail from './pages/VerifyEmail.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
 import { SocketProvider } from './context/SocketContext.jsx'
+import { ThemeProvider } from './context/ThemeContext.jsx'
 
 function AppWithSocket() {
   const { user } = useAuth()
@@ -39,8 +40,10 @@ function AppWithSocket() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppWithSocket />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppWithSocket />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

@@ -657,9 +657,19 @@ export async function toggleReaction(msgId, userId, emoji) {
 // ─── Direct Messages ──────────────────────────────────────────────────────────
 
 export async function findUserByUsername(username) {
+  const parts = username.split('#')
+  const uname = parts[0].trim()
+  const disc = parts[1]?.trim()
+  if (disc) {
+    const { rows } = await pool.query(
+      'SELECT id, username, discriminator, display_name, avatar_url, avatar_color FROM users WHERE lower(username) = lower($1) AND discriminator = $2',
+      [uname, disc]
+    )
+    return rows[0] ?? null
+  }
   const { rows } = await pool.query(
     'SELECT id, username, discriminator, display_name, avatar_url, avatar_color FROM users WHERE lower(username) = lower($1)',
-    [username]
+    [uname]
   )
   return rows[0] ?? null
 }

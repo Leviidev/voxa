@@ -1,8 +1,30 @@
 import { useState, useRef } from 'react'
-import { X, Check, AlertCircle, User, Image, Smile } from 'lucide-react'
+import { X, Check, AlertCircle, User, Image, Smile, Upload } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { api } from '../lib/api.js'
 import clsx from 'clsx'
+
+function resizeToDataUrl(file, maxW, maxH, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = (e) => {
+      const img = new window.Image()
+      img.onerror = reject
+      img.onload = () => {
+        let w = img.width, h = img.height
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW }
+        if (h > maxH) { w = Math.round(w * maxH / h); h = maxH }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
 
 const AVATAR_COLORS = [
   '#E53935', '#D81B60', '#8E24AA', '#3949AB',
@@ -168,6 +190,22 @@ function GeneralTab({ form, handle, user, avatarColor, bannerColor, displayName 
 }
 
 function AvatarTab({ form, handle, avatarColor, displayName, user }) {
+  const fileRef = useRef()
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 8 * 1024 * 1024) { setUploadError('File must be under 8 MB'); return }
+    setUploading(true); setUploadError('')
+    try {
+      const dataUrl = await resizeToDataUrl(file, 400, 400)
+      handle('avatarUrl', dataUrl)
+    } catch { setUploadError('Failed to process image') }
+    finally { setUploading(false) }
+  }
+
   return (
     <div className="space-y-5">
       {/* Preview */}
@@ -178,6 +216,22 @@ function AvatarTab({ form, handle, avatarColor, displayName, user }) {
             ? <img src={form.avatarUrl} alt="avatar" className="w-full h-full object-cover" onError={() => {}} />
             : (displayName[0] ?? '?').toUpperCase()}
         </div>
+      </div>
+
+      <div>
+        <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-2">Upload Photo</label>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-2 bg-[#F7F8FA] border border-[#E3E5E8] hover:bg-[#F2F3F5] disabled:opacity-50 text-[#5C6068] hover:text-[#1A1B1E] font-medium px-4 py-2.5 rounded-xl text-sm transition-colors w-full justify-center">
+          <Upload size={14} />{uploading ? 'Uploading…' : 'Choose Image'}
+        </button>
+        {uploadError && <p className="text-[#E53935] text-xs mt-1">{uploadError}</p>}
+        {form.avatarUrl && (
+          <button onClick={() => handle('avatarUrl', '')}
+            className="mt-1.5 text-xs text-[#96989D] hover:text-[#E53935] transition-colors w-full text-center">
+            Remove image
+          </button>
+        )}
       </div>
 
       <div>
@@ -195,14 +249,31 @@ function AvatarTab({ form, handle, avatarColor, displayName, user }) {
         </div>
       </div>
 
-      <Field label="Avatar Image URL" placeholder="https://example.com/my-pic.png"
-        value={form.avatarUrl} onChange={v => handle('avatarUrl', v)}
-        hint="Paste a direct image link (PNG, JPG, GIF)" />
+      <Field label="Or paste image URL" placeholder="https://example.com/my-pic.png"
+        value={form.avatarUrl?.startsWith('data:') ? '' : form.avatarUrl}
+        onChange={v => handle('avatarUrl', v)}
+        hint="PNG, JPG, or GIF — direct image link" />
     </div>
   )
 }
 
 function BannerTab({ form, handle, avatarColor, bannerColor, displayName }) {
+  const fileRef = useRef()
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 8 * 1024 * 1024) { setUploadError('File must be under 8 MB'); return }
+    setUploading(true); setUploadError('')
+    try {
+      const dataUrl = await resizeToDataUrl(file, 1200, 400)
+      handle('bannerUrl', dataUrl)
+    } catch { setUploadError('Failed to process image') }
+    finally { setUploading(false) }
+  }
+
   return (
     <div className="space-y-5">
       {/* Preview */}
@@ -220,6 +291,22 @@ function BannerTab({ form, handle, avatarColor, bannerColor, displayName }) {
       </div>
 
       <div>
+        <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-2">Upload Banner</label>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-2 bg-[#F7F8FA] border border-[#E3E5E8] hover:bg-[#F2F3F5] disabled:opacity-50 text-[#5C6068] hover:text-[#1A1B1E] font-medium px-4 py-2.5 rounded-xl text-sm transition-colors w-full justify-center">
+          <Upload size={14} />{uploading ? 'Uploading…' : 'Choose Image'}
+        </button>
+        {uploadError && <p className="text-[#E53935] text-xs mt-1">{uploadError}</p>}
+        {form.bannerUrl && (
+          <button onClick={() => handle('bannerUrl', '')}
+            className="mt-1.5 text-xs text-[#96989D] hover:text-[#E53935] transition-colors w-full text-center">
+            Remove banner
+          </button>
+        )}
+      </div>
+
+      <div>
         <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-2">Banner Color</label>
         <div className="flex flex-wrap gap-2">
           {BANNER_COLORS.map(c => (
@@ -234,9 +321,10 @@ function BannerTab({ form, handle, avatarColor, bannerColor, displayName }) {
         </div>
       </div>
 
-      <Field label="Banner Image URL" placeholder="https://example.com/banner.png"
-        value={form.bannerUrl} onChange={v => handle('bannerUrl', v)}
-        hint="Paste a direct image link — recommended size 1500×500px" />
+      <Field label="Or paste banner URL" placeholder="https://example.com/banner.png"
+        value={form.bannerUrl?.startsWith('data:') ? '' : form.bannerUrl}
+        onChange={v => handle('bannerUrl', v)}
+        hint="Recommended size 1500×500px — direct image link" />
     </div>
   )
 }

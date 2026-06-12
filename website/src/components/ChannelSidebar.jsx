@@ -125,7 +125,7 @@ function DMList({ navigate, user, unread }) {
             autoFocus
             value={newUsername}
             onChange={e => { setNewUsername(e.target.value); setNewError('') }}
-            placeholder="Enter username"
+            placeholder="username or username#1234"
             className="w-full bg-white border border-[#E3E5E8] focus:border-[#E53935] rounded-lg px-3 py-1.5 text-xs text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors"
           />
           {newError && <p className="text-[10px] text-[#E53935] mt-1 px-1">{newError}</p>}
@@ -306,7 +306,7 @@ function UserPanel({ user, logout, navigate }) {
         <PanelBtn label={deafened ? 'Undeafen' : 'Deafen'} onClick={() => setDeafened(v => !v)} active={deafened}>
           <Headphones size={14} />
         </PanelBtn>
-        <PanelBtn label="User Settings" onClick={() => navigate('/voxa/me')}>
+        <PanelBtn label="User Settings" onClick={() => navigate('/voxa/me?settings=1')}>
           <Settings size={14} />
         </PanelBtn>
       </div>

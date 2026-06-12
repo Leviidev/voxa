@@ -43,6 +43,7 @@ export function useMessages(channelId) {
     const onNew = (msg) => {
       if (msg.channelId !== channelIdRef.current) return
       setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev
         const optimisticIdx = prev.findIndex(
           m => m.id.startsWith('opt_') && m.authorId === msg.authorId
         )
