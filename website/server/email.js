@@ -1,6 +1,11 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend = null
+function getResend() {
+  if (!process.env.RESEND_API_KEY) return null
+  if (!resend) resend = new Resend(process.env.RESEND_API_KEY)
+  return resend
+}
 const FROM = 'Voxa <noreply@voxa.lol>'
 
 function getAppUrl() {
@@ -64,7 +69,9 @@ export async function sendPasswordResetEmail(toEmail, token) {
     <p style="margin:12px 0 0;color:#C0C2C7;font-size:12px;word-break:break-all">
       Or copy this link: ${link}
     </p>`
-  return resend.emails.send({
+  const client = getResend()
+  if (!client) { console.warn('RESEND_API_KEY not set — skipping password reset email'); return }
+  return client.emails.send({
     from: FROM,
     to: [toEmail],
     subject: 'Reset your Voxa password',
@@ -88,7 +95,9 @@ export async function sendVerificationEmail(toEmail, token) {
     <p style="margin:12px 0 0;color:#C0C2C7;font-size:12px;word-break:break-all">
       Or copy this link: ${link}
     </p>`
-  return resend.emails.send({
+  const client = getResend()
+  if (!client) { console.warn('RESEND_API_KEY not set — skipping verification email'); return }
+  return client.emails.send({
     from: FROM,
     to: [toEmail],
     subject: 'Verify your Voxa email address',
