@@ -101,6 +101,16 @@ export const api = {
   postReply: (msgId, content) =>
     request(`/messages/${msgId}/replies`, { method: 'POST', body: JSON.stringify({ content }) }),
 
+  // Auth extras
+  forgotPassword: (email) =>
+    request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token, password) =>
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+  verifyEmail: (token) =>
+    request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
+  resendVerification: () =>
+    request('/auth/resend-verification', { method: 'POST' }),
+
   // Unread
   getUnread: () => request('/unread'),
   markChannelRead: (channelId) => request(`/channels/${channelId}/read`, { method: 'POST' }),

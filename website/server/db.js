@@ -36,6 +36,7 @@ function publicUser(u) {
     bannerColor: rest.banner_color,
     status: rest.status,
     createdAt: rest.created_at,
+    emailVerified: rest.email_verified ?? false,
   }
 }
 
@@ -831,4 +832,61 @@ export async function getUnreadCounts(userId) {
   const dms = {}
   for (const r of dmRows) dms[r.dm_channel_id] = Number(r.cnt)
   return { channels, dms }
+}
+
+// ─── Password Reset ───────────────────────────────────────────────────────────
+
+export async function getUserByEmail(email) {
+  const { rows } = await pool.query(
+    `SELECT id, email, email_verified FROM users WHERE LOWER(email) = LOWER($1)`,
+    [email]
+  )
+  return rows[0] ?? null
+}
+
+export async function createPasswordReset(userId) {
+  const { randomBytes } = await import('crypto')
+  const token = randomBytes(32).toString('hex')
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+  await pool.query(
+    `INSERT INTO password_resets (token, user_id, expires_at) VALUES ($1,$2,$3)`,
+    [token, userId, expiresAt]
+  )
+  return token
+}
+
+export async function usePasswordReset(token, newPassword) {
+  const { rows } = await pool.query(
+    `SELECT * FROM password_resets WHERE token=$1 AND used=FALSE AND expires_at>NOW()`,
+    [token]
+  )
+  if (!rows[0]) { const e = new Error('Invalid or expired reset link'); e.status = 400; throw e }
+  const bcrypt = await import('bcryptjs')
+  const hash = await bcrypt.hash(newPassword, 12)
+  await pool.query(`UPDATE users SET password_hash=$1 WHERE id=$2`, [hash, rows[0].user_id])
+  await pool.query(`UPDATE password_resets SET used=TRUE WHERE token=$1`, [token])
+}
+
+// ─── Email Verification ───────────────────────────────────────────────────────
+
+export async function createEmailVerification(userId) {
+  const { randomBytes } = await import('crypto')
+  const token = randomBytes(32).toString('hex')
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+  await pool.query(`DELETE FROM email_verifications WHERE user_id=$1`, [userId])
+  await pool.query(
+    `INSERT INTO email_verifications (token, user_id, expires_at) VALUES ($1,$2,$3)`,
+    [token, userId, expiresAt]
+  )
+  return token
+}
+
+export async function useEmailVerification(token) {
+  const { rows } = await pool.query(
+    `SELECT * FROM email_verifications WHERE token=$1 AND expires_at>NOW()`,
+    [token]
+  )
+  if (!rows[0]) { const e = new Error('Invalid or expired verification link'); e.status = 400; throw e }
+  await pool.query(`UPDATE users SET email_verified=TRUE WHERE id=$1`, [rows[0].user_id])
+  await pool.query(`DELETE FROM email_verifications WHERE token=$1`, [token])
 }

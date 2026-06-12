@@ -6,6 +6,8 @@ import Me from './pages/Me.jsx'
 import ServerView from './pages/ServerView.jsx'
 import InviteJoin from './pages/InviteJoin.jsx'
 import DmChat from './components/DmChat.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
+import VerifyEmail from './pages/VerifyEmail.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
 import { SocketProvider } from './context/SocketContext.jsx'
@@ -18,6 +20,8 @@ function AppWithSocket() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/invite/:code" element={<InviteJoin />} />
           <Route path="/voxa" element={<AppLayout />}>
             <Route index element={<Navigate to="/voxa/me" replace />} />

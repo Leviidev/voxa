@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { api } from '../lib/api.js'
 
 export default function Login() {
   const [params] = useSearchParams()
   const [isRegister, setIsRegister] = useState(params.get('mode') === 'register')
+  const [forgotPw, setForgotPw] = useState(false)
   const [form, setForm] = useState({ email: '', username: '', password: '' })
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSent, setForgotSent] = useState(false)
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,10 +41,32 @@ export default function Login() {
     setLoading(false)
   }
 
+  const submitForgot = async (e) => {
+    e.preventDefault()
+    if (!forgotEmail.trim()) return
+    setError('')
+    setLoading(true)
+    try {
+      await api.forgotPassword(forgotEmail.trim())
+      setForgotSent(true)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
   const switchMode = () => {
     setIsRegister(v => !v)
+    setForgotPw(false)
     setError('')
     setForm({ email: '', username: '', password: '' })
+  }
+
+  const openForgot = () => {
+    setForgotPw(true)
+    setForgotEmail(form.email)
+    setForgotSent(false)
+    setError('')
   }
 
   return (
@@ -54,80 +80,134 @@ export default function Login() {
         </Link>
 
         <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#E3E5E8]">
-          <div className="mb-6">
-            <h1 className="text-xl font-black text-[#1A1B1E] tracking-tight mb-1">
-              {isRegister ? 'Create your account' : 'Welcome back'}
-            </h1>
-            <p className="text-[#96989D] text-sm">
-              {isRegister ? 'Join Voxa — it takes 30 seconds.' : 'Good to see you again.'}
-            </p>
-          </div>
 
-          {error && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
-              <AlertCircle size={15} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={submit} className="space-y-4" noValidate>
-            {isRegister && (
-              <Field label="Username" name="username" value={form.username} onChange={handle} placeholder="cooluser" />
-            )}
-            <Field label="Email" name="email" type="email" value={form.email} onChange={handle} placeholder="you@example.com" />
-            <div>
-              <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  name="password"
-                  value={form.password}
-                  onChange={handle}
-                  placeholder="••••••••"
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
-                  required
-                  minLength={6}
-                  className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] pr-10 placeholder:text-[#96989D] transition-all"
-                />
-                <button type="button" onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#96989D] hover:text-[#5C6068] transition-colors">
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+          {/* ── Forgot password ── */}
+          {forgotPw ? (
+            forgotSent ? (
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={28} className="text-green-500" />
+                </div>
+                <h1 className="text-xl font-black text-[#1A1B1E] tracking-tight mb-2">Check your email</h1>
+                <p className="text-[#5C6068] text-sm mb-6">
+                  If that address has a Voxa account, a reset link is on its way. Check your spam folder too.
+                </p>
+                <button onClick={() => { setForgotPw(false); setForgotSent(false) }}
+                  className="w-full bg-[#E53935] hover:bg-[#C62828] text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm">
+                  Back to login
                 </button>
               </div>
-              {isRegister && (
-                <p className="text-[#96989D] text-xs mt-1.5">At least 6 characters.</p>
-              )}
-            </div>
-
-            {!isRegister && (
-              <div className="text-right -mt-1">
-                <a href="mailto:voxa@voxa.lol" className="text-[#E53935] hover:text-[#C62828] text-xs transition-colors">
-                  Forgot your password?
-                </a>
+            ) : (
+              <>
+                <button onClick={() => setForgotPw(false)}
+                  className="flex items-center gap-1.5 text-[#96989D] hover:text-[#5C6068] text-sm mb-5 transition-colors -ml-1">
+                  <ArrowLeft size={14} /> Back to login
+                </button>
+                <div className="mb-6">
+                  <h1 className="text-xl font-black text-[#1A1B1E] tracking-tight mb-1">Reset your password</h1>
+                  <p className="text-[#96989D] text-sm">Enter your email and we'll send a reset link.</p>
+                </div>
+                {error && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                <form onSubmit={submitForgot} className="space-y-4" noValidate>
+                  <Field label="Email" name="forgot-email" type="email" value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)} placeholder="you@example.com" />
+                  <button type="submit" disabled={loading || !forgotEmail.trim()}
+                    className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm hover:shadow-md active:scale-[0.99]">
+                    {loading
+                      ? <span className="flex items-center justify-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Sending…
+                        </span>
+                      : 'Send reset link'}
+                  </button>
+                </form>
+              </>
+            )
+          ) : (
+            /* ── Login / Register ── */
+            <>
+              <div className="mb-6">
+                <h1 className="text-xl font-black text-[#1A1B1E] tracking-tight mb-1">
+                  {isRegister ? 'Create your account' : 'Welcome back'}
+                </h1>
+                <p className="text-[#96989D] text-sm">
+                  {isRegister ? 'Join Voxa — it takes 30 seconds.' : 'Good to see you again.'}
+                </p>
               </div>
-            )}
 
-            <button type="submit" disabled={loading}
-              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2 shadow-sm hover:shadow-md active:scale-[0.99]">
-              {loading
-                ? <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Please wait…
-                  </span>
-                : isRegister ? 'Create account' : 'Log in'
-              }
-            </button>
-          </form>
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-5">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-          <p className="text-[#96989D] text-xs mt-5 text-center">
-            {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-            <button onClick={switchMode}
-              className="text-[#E53935] hover:text-[#C62828] font-semibold transition-colors">
-              {isRegister ? 'Log in' : 'Sign up free'}
-            </button>
-          </p>
+              <form onSubmit={submit} className="space-y-4" noValidate>
+                {isRegister && (
+                  <Field label="Username" name="username" value={form.username} onChange={handle} placeholder="cooluser" />
+                )}
+                <Field label="Email" name="email" type="email" value={form.email} onChange={handle} placeholder="you@example.com" />
+                <div>
+                  <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      name="password"
+                      value={form.password}
+                      onChange={handle}
+                      placeholder="••••••••"
+                      autoComplete={isRegister ? 'new-password' : 'current-password'}
+                      required
+                      minLength={6}
+                      className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] pr-10 placeholder:text-[#96989D] transition-all"
+                    />
+                    <button type="button" onClick={() => setShowPw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#96989D] hover:text-[#5C6068] transition-colors">
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {isRegister && (
+                    <p className="text-[#96989D] text-xs mt-1.5">At least 6 characters.</p>
+                  )}
+                </div>
+
+                {!isRegister && (
+                  <div className="text-right -mt-1">
+                    <button type="button" onClick={openForgot}
+                      className="text-[#E53935] hover:text-[#C62828] text-xs transition-colors font-medium">
+                      Forgot your password?
+                    </button>
+                  </div>
+                )}
+
+                <button type="submit" disabled={loading}
+                  className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2 shadow-sm hover:shadow-md active:scale-[0.99]">
+                  {loading
+                    ? <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Please wait…
+                      </span>
+                    : isRegister ? 'Create account' : 'Log in'
+                  }
+                </button>
+              </form>
+
+              <p className="text-[#96989D] text-xs mt-5 text-center">
+                {isRegister ? 'Already have an account? ' : "Don't have an account? "}
+                <button onClick={switchMode}
+                  className="text-[#E53935] hover:text-[#C62828] font-semibold transition-colors">
+                  {isRegister ? 'Log in' : 'Sign up free'}
+                </button>
+              </p>
+            </>
+          )}
         </div>
 
         <p className="text-center text-[#C0C2C7] text-xs mt-5">

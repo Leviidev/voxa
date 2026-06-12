@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3 } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
+import { api } from '../lib/api.js'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
@@ -21,6 +22,9 @@ export default function Me() {
     <div className="flex-1 flex overflow-hidden bg-white">
       {showEditProfile && <ProfileEditModal onClose={() => setShowEditProfile(false)} />}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {user && !user.emailVerified && (
+          <VerifyBanner onSettings={() => setShowSettings(true)} />
+        )}
         <div className="h-12 px-4 flex items-center gap-3 border-b border-[#E3E5E8] shrink-0 bg-white">
           <Users size={17} className="text-[#96989D]" />
           <span className="font-bold text-[#1A1B1E] text-sm">Friends</span>
@@ -188,8 +192,49 @@ function SettingsPanel({ user, onClose, onLogout, onEditProfile }) {
   )
 }
 
+function VerifyBanner({ onSettings }) {
+  const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const resend = async () => {
+    setLoading(true)
+    try {
+      await api.resendVerification()
+      setSent(true)
+    } catch (_) {}
+    setLoading(false)
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border-b border-amber-200 shrink-0">
+      <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+      <span className="text-amber-700 text-xs flex-1">
+        {sent ? 'Verification email sent — check your inbox.' : 'Please verify your email address to secure your account.'}
+      </span>
+      {!sent && (
+        <button onClick={resend} disabled={loading}
+          className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0 transition-colors disabled:opacity-50">
+          {loading ? 'Sending…' : 'Resend email'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function AccountSettings({ user, onEditProfile }) {
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifySent, setVerifySent] = useState(false)
   const color = user?.avatarColor ?? avatarColor(user?.username)
+
+  const resendVerification = async () => {
+    setVerifyLoading(true)
+    try {
+      await api.resendVerification()
+      setVerifySent(true)
+    } catch (_) {}
+    setVerifyLoading(false)
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl overflow-hidden border border-[#E3E5E8]">
@@ -229,6 +274,30 @@ function AccountSettings({ user, onEditProfile }) {
           </div>
         </div>
       ))}
+      <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={clsx(
+            'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
+            user?.emailVerified ? 'bg-green-100' : 'bg-amber-100'
+          )}>
+            {user?.emailVerified
+              ? <CheckCircle2 size={16} className="text-green-600" />
+              : <Mail size={16} className="text-amber-500" />}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-0.5">Email verification</div>
+            <div className="text-[#1A1B1E] text-sm font-medium">
+              {user?.emailVerified ? 'Verified' : 'Not verified'}
+            </div>
+          </div>
+        </div>
+        {!user?.emailVerified && (
+          <button onClick={resendVerification} disabled={verifyLoading || verifySent}
+            className="shrink-0 text-xs font-semibold text-[#E53935] hover:text-[#C62828] disabled:opacity-50 transition-colors">
+            {verifySent ? 'Email sent ✓' : verifyLoading ? 'Sending…' : 'Resend email'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
