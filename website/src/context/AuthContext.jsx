@@ -27,11 +27,12 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    const { token, user } = await api.login(email, password)
-    localStorage.setItem('voxa_token', token)
-    localStorage.setItem('voxa_user', JSON.stringify(user))
-    setUser(user)
-    return user
+    const data = await api.login(email, password)
+    if (data.requires2FA) return data
+    localStorage.setItem('voxa_token', data.token)
+    localStorage.setItem('voxa_user', JSON.stringify(data.user))
+    setUser(data.user)
+    return data.user
   }
 
   const register = async (email, username, password) => {

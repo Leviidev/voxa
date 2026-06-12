@@ -446,7 +446,7 @@ function TwoFactorSection({ user }) {
         <p className="text-xs text-[#5C6068]">Enter your current 6-digit code or a backup code to confirm.</p>
         {error && <p className="text-red-500 text-xs">{error}</p>}
         <input type="text" value={code} onChange={e => setCode(e.target.value)}
-          placeholder="000 000 or backup code" inputMode="numeric" maxLength={12}
+          placeholder="000 000 or backup code" inputMode="text" maxLength={13}
           className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] font-mono tracking-widest text-center" />
         <div className="flex gap-2">
           <button onClick={cancel} className="flex-1 py-2.5 rounded-xl border border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] text-sm font-medium transition-colors">Cancel</button>

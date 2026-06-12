@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { generateSecret, generateURI, generateSync, verifySync } from 'otplib'
+import { generateSecret, generateURI, verifySync } from 'otplib'
 import QRCode from 'qrcode'
 import { randomBytes } from 'crypto'
 import bcrypt from 'bcryptjs'

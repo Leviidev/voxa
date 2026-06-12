@@ -15,17 +15,12 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login, register, user } = useAuth()
+  const { register, user } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => { if (user) navigate('/voxa/me') }, [user])
 
   const handle = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
-
-  const handleSuccess = (token, userData) => {
-    localStorage.setItem('voxa_token', token)
-    window.location.href = '/voxa/me'
-  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -260,8 +255,8 @@ function TwoFAStep({ tempToken, onBack }) {
               <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Code</label>
               <input
                 type="text" value={code} onChange={e => setCode(e.target.value)}
-                placeholder="000 000" autoComplete="one-time-code" inputMode="numeric"
-                maxLength={10}
+                placeholder="000 000 or backup code" autoComplete="one-time-code" inputMode="text"
+                maxLength={13}
                 className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935] placeholder:text-[#96989D] transition-all text-center tracking-widest text-base font-mono"
               />
             </div>
