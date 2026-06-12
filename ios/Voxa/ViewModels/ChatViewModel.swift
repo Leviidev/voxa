@@ -23,9 +23,7 @@ class ChatViewModel: ObservableObject {
             messages = remote
             saveLocal(channelId: channelId)
         } catch {
-            if messages.isEmpty {
-                messages = VoxaMessage.mockMessages(for: channelId)
-            }
+            self.error = error.localizedDescription
         }
         isLoading = false
 
@@ -65,15 +63,13 @@ class ChatViewModel: ObservableObject {
     }
 
     func edit(message: VoxaMessage, newContent: String) async {
-        guard let channelId = message.channelId ?? currentChannelId,
-              let idx = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        guard let idx = messages.firstIndex(where: { $0.id == message.id }) else { return }
         messages[idx].content = newContent
         messages[idx].edited = true
         if let cid = currentChannelId { saveLocal(channelId: cid) }
 
         do {
-            let updated = try await APIClient.shared.editMessage(channelId: channelId,
-                                                                  messageId: message.id,
+            let updated = try await APIClient.shared.editMessage(messageId: message.id,
                                                                   content: newContent)
             if let i = messages.firstIndex(where: { $0.id == message.id }) {
                 messages[i] = updated
@@ -82,10 +78,9 @@ class ChatViewModel: ObservableObject {
     }
 
     func delete(message: VoxaMessage) async {
-        guard let channelId = message.channelId ?? currentChannelId else { return }
         messages.removeAll { $0.id == message.id }
         if let cid = currentChannelId { saveLocal(channelId: cid) }
-        try? await APIClient.shared.deleteMessage(channelId: channelId, messageId: message.id)
+        try? await APIClient.shared.deleteMessage(messageId: message.id)
     }
 
     // MARK: - Polling (every 3s when app is active)

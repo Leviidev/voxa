@@ -22,9 +22,7 @@ class ServersViewModel: ObservableObject {
             servers = remote
             saveLocal()
         } catch {
-            if servers.isEmpty {
-                servers = VoxaServer.mock
-            }
+            self.error = error.localizedDescription
         }
         isLoading = false
     }

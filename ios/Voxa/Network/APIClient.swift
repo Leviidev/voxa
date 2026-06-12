@@ -112,23 +112,23 @@ actor APIClient {
     // MARK: - Messages
 
     func messages(channelId: String, limit: Int = 50) async throws -> [VoxaMessage] {
-        try await perform("/api/channels/\(channelId)/messages?limit=\(limit)")
+        try await perform("/api/messages/channels/\(channelId)/messages?limit=\(limit)")
     }
 
     func sendMessage(channelId: String, content: String) async throws -> VoxaMessage {
         struct Body: Encodable { let content: String }
-        return try await perform("/api/channels/\(channelId)/messages", method: "POST",
+        return try await perform("/api/messages/channels/\(channelId)/messages", method: "POST",
                                  body: Body(content: content))
     }
 
-    func editMessage(channelId: String, messageId: String, content: String) async throws -> VoxaMessage {
+    func editMessage(messageId: String, content: String) async throws -> VoxaMessage {
         struct Body: Encodable { let content: String }
-        return try await perform("/api/channels/\(channelId)/messages/\(messageId)", method: "PATCH",
+        return try await perform("/api/messages/\(messageId)", method: "PATCH",
                                  body: Body(content: content))
     }
 
-    func deleteMessage(channelId: String, messageId: String) async throws {
-        try await performVoid("/api/channels/\(channelId)/messages/\(messageId)", method: "DELETE")
+    func deleteMessage(messageId: String) async throws {
+        try await performVoid("/api/messages/\(messageId)", method: "DELETE")
     }
 
     // MARK: - Profile
