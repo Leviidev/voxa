@@ -702,6 +702,61 @@ export async function toggleReaction(msgId, userId, emoji) {
   return { messageId: msgId, channelId: msg.channel_id, reactions }
 }
 
+// ─── Pins ─────────────────────────────────────────────────────────────────────
+
+export async function getPinnedMessages(channelId) {
+  const { rows } = await pool.query(
+    `SELECT m.*,
+       0 AS reply_count,
+       COALESCE(
+         (SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+          FROM (SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+                FROM message_reactions WHERE message_id = m.id GROUP BY emoji) sub
+         ), '{}'::jsonb
+       ) AS reactions
+     FROM messages m
+     WHERE m.channel_id = $1 AND m.is_pinned = true
+     ORDER BY m.pinned_at DESC`,
+    [channelId]
+  )
+  return rows.map(m => ({ ...shapeMessage(m), isPinned: true, pinnedAt: m.pinned_at, pinnedBy: m.pinned_by }))
+}
+
+export async function pinMessage(channelId, msgId, userId) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM messages WHERE id=$1 AND channel_id=$2', [msgId, channelId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  const { rows: [u] } = await pool.query('SELECT username FROM users WHERE id=$1', [userId])
+  const { rows: [updated] } = await pool.query(
+    'UPDATE messages SET is_pinned=true, pinned_at=NOW(), pinned_by=$1 WHERE id=$2 RETURNING *',
+    [u?.username ?? 'Unknown', msgId]
+  )
+  return { ...shapeMessage({ ...updated, reply_count: 0, reactions: {} }), isPinned: true }
+}
+
+export async function unpinMessage(channelId, msgId, userId) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM messages WHERE id=$1 AND channel_id=$2', [msgId, channelId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  await pool.query('UPDATE messages SET is_pinned=false, pinned_at=NULL, pinned_by=NULL WHERE id=$1', [msgId])
+  return { ok: true }
+}
+
+// ─── Channel topic ─────────────────────────────────────────────────────────────
+
+export async function updateChannelTopic(channelId, userId, topic) {
+  const { rows: [ch] } = await pool.query('SELECT * FROM channels WHERE id=$1', [channelId])
+  if (!ch) throw Object.assign(new Error('Channel not found'), { status: 404 })
+  const { rows: [member] } = await pool.query(
+    'SELECT sm.user_id, s.owner_id FROM server_members sm JOIN servers s ON s.id=sm.server_id WHERE sm.server_id=$1 AND sm.user_id=$2',
+    [ch.server_id, userId]
+  )
+  if (!member) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [updated] } = await pool.query(
+    'UPDATE channels SET topic=$1 WHERE id=$2 RETURNING *',
+    [topic ? sanitize(topic, 500) : null, channelId]
+  )
+  return { id: updated.id, name: updated.name, topic: updated.topic }
+}
+
 // ─── Direct Messages ──────────────────────────────────────────────────────────
 
 export async function findUserByUsername(username) {

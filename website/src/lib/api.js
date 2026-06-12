@@ -85,6 +85,13 @@ export const api = {
   // Channels
   createChannel: (serverId, name, type) =>
     request(`/channels/servers/${serverId}/channels`, { method: 'POST', body: JSON.stringify({ name, type }) }),
+  updateChannelTopic: (channelId, topic) =>
+    request(`/channels/${channelId}/topic`, { method: 'PATCH', body: JSON.stringify({ topic }) }),
+
+  // Pins
+  getPins: (channelId) => request(`/channels/${channelId}/pins`),
+  pinMessage: (channelId, msgId) => request(`/channels/${channelId}/pins/${msgId}`, { method: 'PUT' }),
+  unpinMessage: (channelId, msgId) => request(`/channels/${channelId}/pins/${msgId}`, { method: 'DELETE' }),
 
   // Messages
   getMessages: (channelId, limit = 50) =>

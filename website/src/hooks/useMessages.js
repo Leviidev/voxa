@@ -151,5 +151,9 @@ export function useMessages(channelId) {
     try { await api.toggleReaction(messageId, emoji) } catch (_) {}
   }
 
-  return { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction }
+  const setPinned = (msgId, pinned) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, isPinned: pinned } : m))
+  }
+
+  return { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction, setPinned }
 }

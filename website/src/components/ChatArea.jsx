@@ -1,10 +1,14 @@
-import { useState, useRef, useEffect } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
 import { useTyping } from '../hooks/useTyping.js'
 import ThreadPanel from './ThreadPanel.jsx'
+import PinnedMessagesPanel from './PinnedMessagesPanel.jsx'
+import UserProfileCard from './UserProfileCard.jsx'
+import { api } from '../lib/api.js'
+import { useServers } from '../context/ServersContext.jsx'
 import clsx from 'clsx'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
@@ -14,22 +18,35 @@ const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '😮', '😢', 
 export default function ChatArea({ channel, server }) {
   const { user } = useAuth()
   const { connected } = useSocket()
-  const { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction } = useMessages(channel?.id)
+  const { refetch } = useServers()
+  const { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction, setPinned } = useMessages(channel?.id)
   const { typers, onTyping, stopTyping } = useTyping(channel?.id, user)
   const [input, setInput] = useState('')
   const [showMembers, setShowMembers] = useState(false)
+  const [showPins, setShowPins] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editVal, setEditVal] = useState('')
   const [sendError, setSendError] = useState('')
   const [threadMsgId, setThreadMsgId] = useState(null)
+  const [activeProfile, setActiveProfile] = useState(null) // { member, anchorRect }
+  const [topic, setTopic] = useState(channel?.topic ?? '')
+  const [editingTopic, setEditingTopic] = useState(false)
+  const [topicInput, setTopicInput] = useState('')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const prevChannelId = useRef(channel?.id)
+  const isOwner = server?.ownerId === user?.id
 
-  // Close thread when switching channels
+  // Sync topic when channel changes
+  useEffect(() => {
+    setTopic(channel?.topic ?? '')
+  }, [channel?.id, channel?.topic])
+
+  // Close thread/pins when switching channels
   useEffect(() => {
     if (channel?.id !== prevChannelId.current) {
       setThreadMsgId(null)
+      setShowPins(false)
     }
     prevChannelId.current = channel?.id
   }, [channel?.id])
@@ -69,12 +86,49 @@ export default function ChatArea({ channel, server }) {
   const openThread = (msgId) => {
     setThreadMsgId(prev => prev === msgId ? null : msgId)
     setShowMembers(false)
+    setShowPins(false)
   }
 
   const toggleMembers = () => {
     setShowMembers(v => !v)
+    setShowPins(false)
     setThreadMsgId(null)
   }
+
+  const togglePins = () => {
+    setShowPins(v => !v)
+    setShowMembers(false)
+    setThreadMsgId(null)
+  }
+
+  const handlePinMsg = async (msgId) => {
+    try {
+      await api.pinMessage(channel.id, msgId)
+      setPinned?.(msgId, true)
+    } catch (err) { console.error(err) }
+  }
+
+  const handleUnpinMsg = async (msgId) => {
+    try {
+      await api.unpinMessage(channel.id, msgId)
+      setPinned?.(msgId, false)
+    } catch (err) { console.error(err) }
+  }
+
+  const saveTopic = async () => {
+    setEditingTopic(false)
+    if (topicInput === topic) return
+    try {
+      await api.updateChannelTopic(channel.id, topicInput)
+      setTopic(topicInput)
+      refetch()
+    } catch (_) { setTopic(channel?.topic ?? '') }
+  }
+
+  const openProfile = useCallback((member, e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setActiveProfile({ member, anchorRect: rect })
+  }, [])
 
   if (channel?.type === 'voice') {
     return (
@@ -104,33 +158,52 @@ export default function ChatArea({ channel, server }) {
       )}
 
       {/* Top Bar */}
-      <div className="h-12 px-4 flex items-center gap-2.5 border-b border-[#E3E5E8] shrink-0 bg-white">
-        <Hash size={18} className="text-[#96989D] shrink-0" />
-        <span className="font-semibold text-[#1A1B1E] text-sm">{channel?.name ?? 'general'}</span>
-        {channel?.name && (
-          <>
-            <div className="w-px h-4 bg-[#E3E5E8] mx-1 hidden sm:block" />
-            <span className="text-[#96989D] text-xs hidden sm:block truncate">
-              {channel.name === 'general' ? 'Home base 🏠' : `#${channel.name}`}
-            </span>
-          </>
-        )}
-        <div className="flex-1" />
-        <div className="flex items-center gap-0.5">
-          {connected && (
-            <div className="flex items-center gap-1 mr-2" title="Live — real-time updates active">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#23a55a] animate-pulse" />
-              <span className="text-[10px] text-[#96989D] hidden sm:block">Live</span>
-            </div>
+      <div className="shrink-0 bg-white border-b border-[#E3E5E8]">
+        <div className="h-12 px-4 flex items-center gap-2.5">
+          <Hash size={18} className="text-[#96989D] shrink-0" />
+          <span className="font-semibold text-[#1A1B1E] text-sm">{channel?.name ?? 'general'}</span>
+          {topic && (
+            <>
+              <div className="w-px h-4 bg-[#E3E5E8] mx-1 hidden sm:block" />
+              <span className="text-[#96989D] text-xs hidden sm:block truncate max-w-xs">{topic}</span>
+            </>
           )}
-          <TopBtn icon={Bell} label="Notifications" />
-          <TopBtn icon={Pin} label="Pinned" />
-          <TopBtn icon={Users} label="Members" onClick={toggleMembers} active={showMembers} />
-          <div className="mx-1 bg-[#F2F3F5] border border-[#E3E5E8] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
-            <Search size={12} className="text-[#96989D]" />
-            <span className="text-xs text-[#96989D] w-14 hidden sm:block">Search</span>
+          <div className="flex-1" />
+          <div className="flex items-center gap-0.5">
+            {connected && (
+              <div className="flex items-center gap-1 mr-2" title="Live">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#23a55a] animate-pulse" />
+                <span className="text-[10px] text-[#96989D] hidden sm:block">Live</span>
+              </div>
+            )}
+            <TopBtn icon={Bell} label="Notifications" />
+            <TopBtn icon={Pin} label="Pinned Messages" onClick={togglePins} active={showPins} />
+            <TopBtn icon={Users} label="Members" onClick={toggleMembers} active={showMembers} />
+            {isOwner && (
+              <TopBtn icon={Pencil} label="Edit Topic" onClick={() => { setTopicInput(topic); setEditingTopic(true) }} />
+            )}
+            <div className="mx-1 bg-[#F2F3F5] border border-[#E3E5E8] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
+              <Search size={12} className="text-[#96989D]" />
+              <span className="text-xs text-[#96989D] w-14 hidden sm:block">Search</span>
+            </div>
           </div>
         </div>
+        {/* Topic editor */}
+        {editingTopic && (
+          <div className="px-4 pb-2 flex items-center gap-2">
+            <input
+              autoFocus
+              value={topicInput}
+              onChange={e => setTopicInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveTopic(); if (e.key === 'Escape') setEditingTopic(false) }}
+              placeholder="Set a channel topic…"
+              maxLength={500}
+              className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+            />
+            <button onClick={saveTopic} className="bg-[#E53935] text-white text-xs font-semibold px-3 py-1.5 rounded-xl hover:bg-[#C62828] transition-colors">Save</button>
+            <button onClick={() => setEditingTopic(false)} className="text-[#96989D] hover:text-[#5C6068] text-xs transition-colors">Cancel</button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -142,7 +215,7 @@ export default function ChatArea({ channel, server }) {
                 <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
               </div>
             )}
-            <ChannelWelcome channel={channel} />
+            <ChannelWelcome channel={channel} topic={topic} />
             {messages.map((msg, i) => {
               const prev = messages[i - 1]
               const grouped = prev?.author === msg.author &&
@@ -154,6 +227,7 @@ export default function ChatArea({ channel, server }) {
                   grouped={grouped}
                   currentUserId={user?.id}
                   isOwn={msg.authorId === user?.id || msg.author === user?.username}
+                  isOwner={isOwner}
                   editing={editingId === msg.id}
                   editVal={editVal}
                   onEditVal={setEditVal}
@@ -164,6 +238,12 @@ export default function ChatArea({ channel, server }) {
                   onReact={(emoji) => toggleReaction(msg.id, emoji)}
                   onOpenThread={() => openThread(msg.id)}
                   threadOpen={threadMsgId === msg.id}
+                  onPin={() => msg.isPinned ? handleUnpinMsg(msg.id) : handlePinMsg(msg.id)}
+                  onAvatarClick={(e) => {
+                    const member = server?.members?.find(m => m.id === msg.authorId)
+                    if (member) openProfile(member, e)
+                    else openProfile({ username: msg.author, displayName: msg.displayName, avatarUrl: msg.avatarUrl, avatarColor: msg.avatarColor, status: 'offline' }, e)
+                  }}
                 />
               )
             })}
@@ -203,7 +283,7 @@ export default function ChatArea({ channel, server }) {
           </div>
         </div>
 
-        {/* Right panels — thread takes priority over members */}
+        {/* Right panels — thread > pins > members */}
         {threadMsgId && (
           <ThreadPanel
             key={threadMsgId}
@@ -212,8 +292,28 @@ export default function ChatArea({ channel, server }) {
             onClose={() => setThreadMsgId(null)}
           />
         )}
-        {showMembers && !threadMsgId && server && <MemberList members={server.members} />}
+        {showPins && !threadMsgId && channel && (
+          <PinnedMessagesPanel
+            channel={channel}
+            currentUserId={user?.id}
+            onClose={() => setShowPins(false)}
+            onUnpin={(msgId) => setPinned?.(msgId, false)}
+          />
+        )}
+        {showMembers && !threadMsgId && !showPins && server && (
+          <MemberList members={server.members} onMemberClick={openProfile} />
+        )}
       </div>
+
+      {/* User profile card */}
+      {activeProfile && (
+        <UserProfileCard
+          member={activeProfile.member}
+          anchorRect={activeProfile.anchorRect}
+          onClose={() => setActiveProfile(null)}
+          serverId={server?.id}
+        />
+      )}
     </div>
   )
 }
@@ -258,14 +358,16 @@ function TopBtn({ icon: Icon, label, onClick, active }) {
 }
 
 // ── Channel welcome banner ────────────────────────────────────────────────────
-function ChannelWelcome({ channel }) {
+function ChannelWelcome({ channel, topic }) {
   return (
     <div className="mb-6 pb-4 border-b border-[#F2F3F5]">
       <div className="w-12 h-12 rounded-2xl bg-[#F2F3F5] border border-[#E3E5E8] flex items-center justify-center mb-3">
         <Hash size={22} className="text-[#96989D]" />
       </div>
       <h3 className="text-xl font-black text-[#1A1B1E] mb-1">Welcome to #{channel?.name ?? 'general'}</h3>
-      <p className="text-[#5C6068] text-sm">This is the start of the #{channel?.name ?? 'general'} channel.</p>
+      {topic
+        ? <p className="text-[#5C6068] text-sm">{topic}</p>
+        : <p className="text-[#5C6068] text-sm">This is the start of the #{channel?.name ?? 'general'} channel.</p>}
     </div>
   )
 }
@@ -339,8 +441,8 @@ function ThreadSummary({ replyCount, open, onClick }) {
 }
 
 // ── Message row ───────────────────────────────────────────────────────────────
-function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditVal,
-  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact, onOpenThread, threadOpen }) {
+function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal, onEditVal,
+  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact, onOpenThread, threadOpen, onPin, onAvatarClick }) {
   const [showPicker, setShowPicker] = useState(false)
   const color = msg.avatarColor || avatarColor(msg.author)
   const isOptimistic = msg.id?.startsWith('opt_')
@@ -382,6 +484,31 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
     )
   }
 
+  const avatar = (
+    <div
+      className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+      style={{ background: msg.avatarUrl ? undefined : color }}
+      onClick={onAvatarClick}>
+      {msg.avatarUrl
+        ? <img src={msg.avatarUrl} alt="" className="w-full h-full object-cover" />
+        : msg.author?.[0]?.toUpperCase()}
+    </div>
+  )
+
+  const nameLine = (
+    <span
+      className="font-semibold text-[#1A1B1E] text-sm cursor-pointer hover:underline"
+      onClick={onAvatarClick}>
+      {msg.displayName ?? msg.author}
+    </span>
+  )
+
+  const pinBadge = msg.isPinned ? (
+    <span className="inline-flex items-center gap-0.5 text-[10px] text-[#6366F1] font-medium">
+      <Pin size={9} /> pinned
+    </span>
+  ) : null
+
   if (grouped) return (
     <div className={clsx(
       'flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5',
@@ -394,13 +521,16 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
           {msg.content}
           {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
         </p>
+        {pinBadge}
         {reactions}
         {threadSummary}
       </div>
       {!isOptimistic && (
         <div className="relative">
-          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete}
-            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen} />
+          <MessageActions isOwn={isOwn} isOwner={isOwner} isPinned={msg.isPinned}
+            onEdit={onStartEdit} onDelete={onDelete}
+            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen}
+            onPin={onPin} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -413,17 +543,13 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
       isOptimistic && 'opacity-60',
       threadOpen && 'bg-[#FFF5F5]',
     )}>
-      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5 overflow-hidden"
-        style={{ background: msg.avatarUrl ? undefined : color }}>
-        {msg.avatarUrl
-          ? <img src={msg.avatarUrl} alt="" className="w-full h-full object-cover" />
-          : msg.author?.[0]?.toUpperCase()}
-      </div>
+      {avatar}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
-          <span className="font-semibold text-[#1A1B1E] text-sm">{msg.displayName ?? msg.author}</span>
+          {nameLine}
           <span className="text-[#96989D] text-xs">{time}</span>
           {isOptimistic && <span className="text-[#96989D] text-[10px]">sending…</span>}
+          {pinBadge}
         </div>
         <p className="text-sm text-[#313439] leading-relaxed">
           {msg.content}
@@ -434,8 +560,10 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
       </div>
       {!isOptimistic && (
         <div className="relative">
-          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete}
-            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen} />
+          <MessageActions isOwn={isOwn} isOwner={isOwner} isPinned={msg.isPinned}
+            onEdit={onStartEdit} onDelete={onDelete}
+            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen}
+            onPin={onPin} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -444,7 +572,7 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
 }
 
 // ── Action buttons row ────────────────────────────────────────────────────────
-function MessageActions({ isOwn, onEdit, onDelete, onReactOpen, onThread, threadOpen }) {
+function MessageActions({ isOwn, isOwner, isPinned, onEdit, onDelete, onReactOpen, onThread, threadOpen, onPin }) {
   return (
     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
       <button onClick={onReactOpen} title="Add Reaction"
@@ -460,6 +588,17 @@ function MessageActions({ isOwn, onEdit, onDelete, onReactOpen, onThread, thread
         )}>
         <MessageSquare size={12} />
       </button>
+      {isOwner && (
+        <button onClick={onPin} title={isPinned ? 'Unpin message' : 'Pin message'}
+          className={clsx(
+            'w-7 h-7 rounded-lg border flex items-center justify-center shadow-sm transition-colors',
+            isPinned
+              ? 'bg-[#6366F1]/10 border-[#6366F1]/30 text-[#6366F1]'
+              : 'bg-white border-[#E3E5E8] text-[#96989D] hover:text-[#6366F1] hover:border-[#6366F1]/30'
+          )}>
+          <Pin size={12} />
+        </button>
+      )}
       {isOwn && (
         <>
           <button onClick={onEdit} title="Edit"
@@ -477,27 +616,56 @@ function MessageActions({ isOwn, onEdit, onDelete, onReactOpen, onThread, thread
 }
 
 // ── Member list panel ─────────────────────────────────────────────────────────
-function MemberList({ members }) {
+function MemberList({ members, onMemberClick }) {
   const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#96989D' }
+
   if (!members?.length) return (
     <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] py-4 shrink-0">
       <div className="px-4 text-[#96989D] text-[10px] font-bold uppercase tracking-wider mb-3">Members — 0</div>
     </div>
   )
-  const grouped = members.reduce((acc, m) => {
-    const g = m.status === 'offline' ? 'Offline' : 'Online'
-    ;(acc[g] = acc[g] ?? []).push(m)
-    return acc
-  }, {})
+
+  // Group by top non-default role first, then fallback to online/offline
+  const online = members.filter(m => m.status !== 'offline')
+  const offline = members.filter(m => m.status === 'offline')
+
+  // Build role groups from online members
+  const roleGroups = {}
+  const noRoleOnline = []
+
+  for (const m of online) {
+    const topRole = (m.roles ?? []).find(r => !r.isDefault && r.name !== '@everyone')
+    if (topRole) {
+      if (!roleGroups[topRole.id]) roleGroups[topRole.id] = { role: topRole, members: [] }
+      roleGroups[topRole.id].members.push(m)
+    } else {
+      noRoleOnline.push(m)
+    }
+  }
+
+  const sections = [
+    ...Object.values(roleGroups).map(g => ({
+      label: g.role.name,
+      color: g.role.color,
+      members: g.members,
+    })),
+    ...(noRoleOnline.length ? [{ label: `Online — ${noRoleOnline.length}`, color: null, members: noRoleOnline }] : []),
+    ...(offline.length ? [{ label: `Offline — ${offline.length}`, color: null, members: offline }] : []),
+  ]
+
   return (
     <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] overflow-y-auto scrollable py-3 shrink-0">
-      {Object.entries(grouped).map(([group, mems]) => (
-        <div key={group} className="mb-4 px-3">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-2 px-1">
-            {group} — {mems.length}
+      {sections.map(section => (
+        <div key={section.label} className="mb-4 px-3">
+          <div className="flex items-center gap-1.5 mb-2 px-1">
+            {section.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: section.color }} />}
+            <span className="text-[9px] font-bold uppercase tracking-widest text-[#96989D]">
+              {section.label} {!section.label.includes('—') && `— ${section.members.length}`}
+            </span>
           </div>
-          {mems.map(m => (
+          {section.members.map(m => (
             <div key={m.id}
+              onClick={e => onMemberClick(m, e)}
               className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-[#EAEBEE] cursor-pointer transition-colors">
               <div className="relative shrink-0">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden"
@@ -511,9 +679,10 @@ function MemberList({ members }) {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-[#5C6068] truncate">{m.displayName ?? m.username}</div>
-                {m.roles?.length > 0 && m.roles[0].name !== '@everyone' && (
-                  <div className="text-[10px] font-medium truncate" style={{ color: m.roles[0].color || '#E53935' }}>
-                    {m.roles[0].name}
+                {m.roles?.length > 0 && m.roles.find(r => !r.isDefault && r.name !== '@everyone') && (
+                  <div className="text-[10px] font-medium truncate"
+                    style={{ color: m.roles.find(r => !r.isDefault)?.color || '#E53935' }}>
+                    {m.roles.find(r => !r.isDefault)?.name}
                   </div>
                 )}
               </div>
