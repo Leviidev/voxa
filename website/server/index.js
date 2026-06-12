@@ -186,7 +186,7 @@ app.use('/api/unread', unreadRoutes)
 // ─── Static Frontend (production) ─────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
-  app.get('*', (req, res, next) => {
+  app.get('/{*path}', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next()
     res.sendFile(join(DIST_DIR, 'index.html'))
   })

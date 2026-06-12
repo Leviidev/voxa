@@ -1,0 +1,50 @@
+2026-06-12T19:58:55.626867535Z dist/assets/index-kxi4aNg1.js     7.53 kB │ gzip:   2.57 kB
+2026-06-12T19:58:55.626889165Z dist/assets/index-J46R5fbn.js   379.73 kB │ gzip: 103.42 kB
+2026-06-12T19:58:55.627145413Z ✓ built in 3.14s
+2026-06-12T19:58:58.218902671Z ==> Uploading build...
+2026-06-12T19:59:02.525527233Z ==> Uploaded in 2.7s. Compression took 1.6s
+2026-06-12T19:59:02.543534148Z ==> Build successful 🎉
+2026-06-12T19:59:06.618132231Z ==> Deploying...
+2026-06-12T19:59:06.722402645Z ==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+2026-06-12T19:59:16.999396511Z ==> Running 'cd website && node server/index.js'
+2026-06-12T19:59:21.48986315Z /opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:108
+2026-06-12T19:59:21.489899592Z                     throw new PathError(`Missing parameter name at index ${index}`, str);
+2026-06-12T19:59:21.489907412Z                           ^
+2026-06-12T19:59:21.489911622Z 
+2026-06-12T19:59:21.489916003Z PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
+2026-06-12T19:59:21.489919853Z     at consumeUntil (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:108:27)
+2026-06-12T19:59:21.489923713Z     at parse (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:140:26)
+2026-06-12T19:59:21.489927593Z     at process (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:263:56)
+2026-06-12T19:59:21.489931223Z     at pathToRegexp (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:274:5)
+2026-06-12T19:59:21.489935154Z     at Object.match (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:225:30)
+2026-06-12T19:59:21.489938844Z     at matcher (/opt/render/project/src/website/node_modules/router/lib/layer.js:86:23)
+2026-06-12T19:59:21.489942744Z     at new Layer (/opt/render/project/src/website/node_modules/router/lib/layer.js:93:62)
+2026-06-12T19:59:21.489946964Z     at Function.route (/opt/render/project/src/website/node_modules/router/index.js:428:17)
+2026-06-12T19:59:21.489951495Z     at Function.route (/opt/render/project/src/website/node_modules/express/lib/application.js:257:22)
+2026-06-12T19:59:21.489955995Z     at app.<computed> [as get] (/opt/render/project/src/website/node_modules/express/lib/application.js:478:22) {
+2026-06-12T19:59:21.489960525Z   originalPath: '*'
+2026-06-12T19:59:21.489964536Z }
+2026-06-12T19:59:21.489968036Z 
+2026-06-12T19:59:21.489971776Z Node.js v18.20.8
+2026-06-12T19:59:23.82799878Z ==> Exited with status 1
+2026-06-12T19:59:23.8302777Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+2026-06-12T19:59:27.833279207Z ==> Running 'cd website && node server/index.js'
+2026-06-12T19:59:31.53128503Z /opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:108
+2026-06-12T19:59:31.531311532Z                     throw new PathError(`Missing parameter name at index ${index}`, str);
+2026-06-12T19:59:31.531316632Z                           ^
+2026-06-12T19:59:31.531319632Z 
+2026-06-12T19:59:31.531324033Z PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.new/pathToRegexpError for info
+2026-06-12T19:59:31.531327203Z     at consumeUntil (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:108:27)
+2026-06-12T19:59:31.531330143Z     at parse (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:140:26)
+2026-06-12T19:59:31.531333753Z     at process (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:263:56)
+2026-06-12T19:59:31.531336763Z     at pathToRegexp (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:274:5)
+2026-06-12T19:59:31.531340074Z     at Object.match (/opt/render/project/src/website/node_modules/path-to-regexp/dist/index.js:225:30)
+2026-06-12T19:59:31.531343014Z     at matcher (/opt/render/project/src/website/node_modules/router/lib/layer.js:86:23)
+2026-06-12T19:59:31.531345834Z     at new Layer (/opt/render/project/src/website/node_modules/router/lib/layer.js:93:62)
+2026-06-12T19:59:31.531348494Z     at Function.route (/opt/render/project/src/website/node_modules/router/index.js:428:17)
+2026-06-12T19:59:31.531351594Z     at Function.route (/opt/render/project/src/website/node_modules/express/lib/application.js:257:22)
+2026-06-12T19:59:31.531356095Z     at app.<computed> [as get] (/opt/render/project/src/website/node_modules/express/lib/application.js:478:22) {
+2026-06-12T19:59:31.531360025Z   originalPath: '*'
+2026-06-12T19:59:31.531363325Z }
+2026-06-12T19:59:31.531366125Z 
+2026-06-12T19:59:31.531369205Z Node.js v18.20.8
