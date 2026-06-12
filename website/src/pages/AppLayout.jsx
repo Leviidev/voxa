@@ -85,7 +85,7 @@ export default function AppLayout() {
 
   return (
     <UnreadProvider>
-      <div className="flex h-screen w-screen overflow-hidden bg-white">
+      <div className="flex h-screen w-screen overflow-hidden bg-[#E8EAED]">
         <ServerSidebar />
         <ChannelSidebar />
         <div className="flex flex-1 overflow-hidden">

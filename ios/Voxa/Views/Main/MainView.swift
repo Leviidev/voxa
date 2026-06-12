@@ -3,7 +3,6 @@ import SwiftUI
 struct MainView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var servers: ServersViewModel
-    @State private var showServerList = true
 
     var body: some View {
         Group {
@@ -18,24 +17,27 @@ struct MainView: View {
         }
     }
 
-    // iPad: three-column split
+    // MARK: - iPad: Three-column
+
     var iPadLayout: some View {
         NavigationSplitView {
             ServerListView()
-                .navigationSplitViewColumnWidth(min: 72, ideal: 72, max: 72)
+                .navigationSplitViewColumnWidth(min: 68, ideal: 68, max: 68)
         } content: {
             if let server = servers.selectedServer {
                 ChannelListView(server: server)
-                    .navigationSplitViewColumnWidth(min: 220, ideal: 240)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 260)
             } else {
                 DMView()
-                    .navigationSplitViewColumnWidth(min: 220, ideal: 240)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 260)
             }
         } detail: {
-            if let channel = servers.selectedChannel, let server = servers.selectedServer, channel.type == .text {
-                ChatView(channel: channel, server: server)
-            } else if let channel = servers.selectedChannel, channel.type == .voice {
-                VoiceChannelView(channel: channel)
+            if let channel = servers.selectedChannel, let server = servers.selectedServer {
+                if channel.isText {
+                    ChatView(channel: channel, server: server)
+                } else {
+                    VoiceChannelView(channel: channel)
+                }
             } else {
                 EmptyChatView()
             }
@@ -43,53 +45,59 @@ struct MainView: View {
         .navigationSplitViewStyle(.balanced)
     }
 
-    // iPhone: tab-based
+    // MARK: - iPhone: Tab-based
+
     var iPhoneLayout: some View {
         TabView {
+            // Servers tab
             NavigationStack {
-                iPhoneServersTab
+                iPhoneServerList
+                    .navigationTitle("Servers")
+                    .navigationBarTitleDisplayMode(.large)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button(action: {}) {
+                                Image(systemName: "plus")
+                                    .foregroundColor(Color(hex: "E53935"))
+                            }
+                        }
+                    }
             }
-            .tabItem {
-                Label("Servers", systemImage: "bubble.left.and.bubble.right")
-            }
+            .tabItem { Label("Servers", systemImage: "bubble.left.and.bubble.right.fill") }
 
+            // DMs tab
             NavigationStack {
                 DMView()
                     .navigationTitle("Messages")
                     .navigationBarTitleDisplayMode(.large)
             }
-            .tabItem {
-                Label("Messages", systemImage: "message")
-            }
+            .tabItem { Label("Messages", systemImage: "message.fill") }
 
+            // Profile tab
             NavigationStack {
                 ProfileView()
                     .navigationTitle("Profile")
+                    .navigationBarTitleDisplayMode(.large)
             }
-            .tabItem {
-                Label("Profile", systemImage: "person.circle")
-            }
+            .tabItem { Label("Profile", systemImage: "person.circle.fill") }
         }
         .tint(Color(hex: "E53935"))
+        .preferredColorScheme(.dark)
     }
 
-    var iPhoneServersTab: some View {
+    var iPhoneServerList: some View {
         List {
             ForEach(servers.servers) { srv in
-                NavigationLink(destination: iPhoneServerView(server: srv)) {
-                    HStack(spacing: 12) {
+                NavigationLink(destination: iPhoneServerChannels(server: srv)) {
+                    HStack(spacing: 14) {
                         ServerIconView(server: srv, size: 44)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(srv.name)
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(.white)
-                            Text("\(srv.members.count) members")
+                            Text("\(srv.members.count) member\(srv.members.count == 1 ? "" : "s")")
                                 .font(.system(size: 12))
                                 .foregroundColor(Color(hex: "949BA4"))
-                        }
-                        Spacer()
-                        if srv.unread {
-                            Circle().fill(Color(hex: "E53935")).frame(width: 8, height: 8)
                         }
                     }
                     .padding(.vertical, 4)
@@ -99,26 +107,16 @@ struct MainView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color(hex: "111214"))
-        .navigationTitle("Servers")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {}) {
-                    Image(systemName: "plus")
-                        .foregroundColor(Color(hex: "E53935"))
-                }
-            }
-        }
     }
 
     @ViewBuilder
-    func iPhoneServerView(server: VoxaServer) -> some View {
+    func iPhoneServerChannels(server: VoxaServer) -> some View {
         List {
             ForEach(server.categories) { cat in
-                Section(cat.name.uppercased()) {
+                Section(cat.name) {
                     ForEach(cat.channels) { ch in
                         NavigationLink(destination: {
-                            if ch.type == .text {
+                            if ch.isText {
                                 ChatView(channel: ch, server: server)
                             } else {
                                 VoiceChannelView(channel: ch)
@@ -138,18 +136,30 @@ struct MainView: View {
     }
 }
 
+// MARK: - Empty Chat
+
 struct EmptyChatView: View {
     var body: some View {
         ZStack {
             Color(hex: "313338").ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 48))
-                    .foregroundColor(Color(hex: "5C5E66"))
-                Text("Select a channel to start chatting")
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "2B2D31"))
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 30))
+                        .foregroundColor(Color(hex: "5C5E66"))
+                }
+                Text("Select a channel")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Text("Pick a channel from the sidebar to start chatting")
+                    .font(.system(size: 13))
                     .foregroundColor(Color(hex: "949BA4"))
-                    .font(.system(size: 15))
+                    .multilineTextAlignment(.center)
             }
+            .padding(.horizontal, 40)
         }
     }
 }

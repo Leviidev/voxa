@@ -10,21 +10,20 @@ class AuthViewModel: ObservableObject {
     @Published var isLoggedIn = false
 
     private let tokenKey = "voxa_token"
-    private let userKey = "voxa_user"
+    private let userKey = "voxa_user_v2"
 
     init() {
         loadStored()
     }
 
     private func loadStored() {
-        if let token = UserDefaults.standard.string(forKey: tokenKey),
-           let data = UserDefaults.standard.data(forKey: userKey),
-           let user = try? JSONDecoder().decode(User.self, from: data) {
-            self.token = token
-            self.user = user
-            self.isLoggedIn = true
-            Task { await APIClient.shared.setToken(token) }
-        }
+        guard let token = UserDefaults.standard.string(forKey: tokenKey),
+              let data = UserDefaults.standard.data(forKey: userKey),
+              let user = try? JSONDecoder().decode(User.self, from: data) else { return }
+        self.token = token
+        self.user = user
+        self.isLoggedIn = true
+        Task { await APIClient.shared.setToken(token) }
     }
 
     func login(email: String, password: String) async {
@@ -39,39 +38,16 @@ class AuthViewModel: ObservableObject {
         isLoading = false
     }
 
-    func register(email: String, username: String, password: String, dob: String?) async {
+    func register(email: String, username: String, password: String) async {
         isLoading = true
         error = nil
         do {
-            let resp = try await APIClient.shared.register(email: email, username: username,
-                                                           password: password, dob: dob)
+            let resp = try await APIClient.shared.register(email: email, username: username, password: password)
             store(resp)
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
-    }
-
-    // Offline / demo login — bypasses API
-    func demoLogin(username: String) {
-        let demoUser = User(
-            id: "demo_\(UUID().uuidString)",
-            username: username.isEmpty ? "you" : username,
-            discriminator: String(format: "%04d", Int.random(in: 1000...9999)),
-            email: "demo@voxa.lol",
-            avatar: nil,
-            status: .online,
-            bio: nil,
-            createdAt: ISO8601DateFormatter().string(from: Date())
-        )
-        let demoToken = "demo_token"
-        token = demoToken
-        user = demoUser
-        isLoggedIn = true
-        if let data = try? JSONEncoder().encode(demoUser) {
-            UserDefaults.standard.set(data, forKey: userKey)
-            UserDefaults.standard.set(demoToken, forKey: tokenKey)
-        }
     }
 
     func logout() {

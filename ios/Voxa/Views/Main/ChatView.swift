@@ -16,7 +16,7 @@ struct ChatView: View {
             Color(hex: "313338").ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Messages
+                // Messages list
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
@@ -25,17 +25,19 @@ struct ChatView: View {
                             ForEach(Array(chat.messages.enumerated()), id: \.element.id) { idx, msg in
                                 let prev = idx > 0 ? chat.messages[idx - 1] : nil
                                 let grouped = prev.map {
-                                    $0.author == msg.author &&
+                                    $0.authorId == msg.authorId &&
                                     msg.timestamp.timeIntervalSince($0.timestamp) < 300
                                 } ?? false
+                                let isOwn = msg.authorId == auth.user?.id
 
                                 MessageRow(
                                     message: msg,
                                     grouped: grouped,
-                                    isOwn: msg.authorId == auth.user?.id || msg.author == auth.user?.username,
+                                    isOwn: isOwn,
                                     onEdit: {
                                         editingMessage = msg
                                         editText = msg.content
+                                        inputFocused = true
                                     },
                                     onDelete: {
                                         Task { await chat.delete(message: msg) }
@@ -49,65 +51,15 @@ struct ChatView: View {
                         .padding(.bottom, 8)
                     }
                     .onChange(of: chat.messages.count) { _ in
-                        withAnimation { proxy.scrollTo("bottom") }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
                     }
                     .onTapGesture { inputFocused = false }
                 }
 
                 // Input bar
-                VStack(spacing: 0) {
-                    Divider().background(Color.black.opacity(0.3))
-
-                    if let editing = editingMessage {
-                        HStack(spacing: 8) {
-                            Image(systemName: "pencil").foregroundColor(Color(hex: "E53935")).font(.system(size: 13))
-                            Text("Editing message")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "949BA4"))
-                            Spacer()
-                            Button(action: { editingMessage = nil; editText = "" }) {
-                                Image(systemName: "xmark").font(.system(size: 12)).foregroundColor(Color(hex: "949BA4"))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                    }
-
-                    HStack(spacing: 10) {
-                        Button(action: {}) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(Color(hex: "949BA4"))
-                        }
-
-                        TextField("Message #\(channel.name)", text: editingMessage != nil ? $editText : $messageText, axis: .vertical)
-                            .focused($inputFocused)
-                            .lineLimit(1...6)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(Color(hex: "383A40"))
-                            .clipShape(RoundedRectangle(cornerRadius: 22))
-                            .foregroundColor(.white)
-                            .font(.system(size: 15))
-
-                        if editingMessage != nil {
-                            Button(action: submitEdit) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(Color(hex: "23a55a"))
-                            }
-                        } else {
-                            Button(action: sendMessage) {
-                                Image(systemName: messageText.isEmpty ? "face.smiling" : "paperplane.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(messageText.isEmpty ? Color(hex: "949BA4") : Color(hex: "E53935"))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(hex: "313338"))
-                }
+                inputBar
             }
         }
         .navigationTitle("#\(channel.name)")
@@ -115,11 +67,9 @@ struct ChatView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
-                    Button(action: {}) {
-                        Image(systemName: "magnifyingglass").foregroundColor(Color(hex: "949BA4"))
-                    }
                     Button(action: { showMemberList.toggle() }) {
-                        Image(systemName: "person.2").foregroundColor(Color(hex: "949BA4"))
+                        Image(systemName: "person.2")
+                            .foregroundColor(Color(hex: "949BA4"))
                     }
                 }
             }
@@ -133,6 +83,72 @@ struct ChatView: View {
         .onDisappear { chat.disconnect() }
     }
 
+    var inputBar: some View {
+        VStack(spacing: 0) {
+            Divider().background(Color.black.opacity(0.4))
+
+            if editingMessage != nil {
+                HStack(spacing: 8) {
+                    Image(systemName: "pencil")
+                        .foregroundColor(Color(hex: "E53935"))
+                        .font(.system(size: 12))
+                    Text("Editing message")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "949BA4"))
+                    Spacer()
+                    Button(action: { editingMessage = nil; editText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: "5C5E66"))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(hex: "2b2d31"))
+            }
+
+            HStack(spacing: 12) {
+                TextField(
+                    editingMessage != nil ? "Edit message…" : "Message #\(channel.name)",
+                    text: editingMessage != nil ? $editText : $messageText,
+                    axis: .vertical
+                )
+                .focused($inputFocused)
+                .lineLimit(1...5)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(hex: "383A40"))
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .foregroundColor(.white)
+                .font(.system(size: 15))
+
+                // Send / confirm button
+                Button(action: editingMessage != nil ? submitEdit : sendMessage) {
+                    ZStack {
+                        Circle()
+                            .fill(canSend ? Color(hex: "E53935") : Color.white.opacity(0.07))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: editingMessage != nil ? "checkmark" : "paperplane.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(canSend ? .white : Color(hex: "5C5E66"))
+                    }
+                }
+                .disabled(!canSend)
+                .animation(.easeInOut(duration: 0.15), value: canSend)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(hex: "313338"))
+        }
+    }
+
+    var canSend: Bool {
+        if editingMessage != nil {
+            return !editText.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        return !messageText.trimmingCharacters(in: .whitespaces).isEmpty && !chat.isSending
+    }
+
     private func sendMessage() {
         guard let user = auth.user else { return }
         let text = messageText.trimmingCharacters(in: .whitespaces)
@@ -143,8 +159,10 @@ struct ChatView: View {
 
     private func submitEdit() {
         guard let msg = editingMessage else { return }
+        let text = editText.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
         Task {
-            await chat.edit(message: msg, newContent: editText)
+            await chat.edit(message: msg, newContent: text)
             editingMessage = nil
             editText = ""
         }
@@ -157,25 +175,33 @@ struct ChannelWelcomeHeader: View {
     let channel: VoxaChannel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle()
                     .fill(Color(hex: "2B2D31"))
-                    .frame(width: 56, height: 56)
-                Image(systemName: "number")
-                    .font(.system(size: 24, weight: .medium))
+                    .frame(width: 60, height: 60)
+                Image(systemName: channel.icon)
+                    .font(.system(size: 26, weight: .medium))
                     .foregroundColor(Color(hex: "949BA4"))
             }
-            Text("Welcome to #\(channel.name)!")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.white)
-            Text("This is the start of the #\(channel.name) channel.")
-                .font(.system(size: 14))
-                .foregroundColor(Color(hex: "949BA4"))
-            Divider().background(Color.white.opacity(0.08)).padding(.top, 8)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Welcome to #\(channel.name)!")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                if let topic = channel.topic, !topic.isEmpty {
+                    Text(topic)
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "949BA4"))
+                } else {
+                    Text("This is the start of the #\(channel.name) channel.")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "949BA4"))
+                }
+            }
+            Divider().background(Color.white.opacity(0.06)).padding(.top, 4)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 20)
+        .padding(.top, 24)
         .padding(.bottom, 8)
     }
 }
@@ -188,35 +214,39 @@ struct MessageRow: View {
     let isOwn: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
-    @State private var showActions = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             if grouped {
-                Text(message.shortTime)
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(hex: "5C5E66"))
-                    .frame(width: 40, alignment: .trailing)
-                    .padding(.top, 2)
-                    .opacity(showActions ? 1 : 0)
+                // Time on hover placeholder
+                Color.clear.frame(width: 40)
             } else {
-                Circle()
-                    .fill(message.avatarColor)
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(String(message.author.prefix(1)).uppercased())
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(message.swiftAvatarColor)
+                        .frame(width: 40, height: 40)
+                    if let url = message.avatarUrl.flatMap(URL.init) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: { EmptyView() }
+                        .clipShape(Circle())
+                        .frame(width: 40, height: 40)
+                    } else {
+                        Text(String(message.effectiveName.prefix(1)).uppercased())
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                    )
+                    }
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 if !grouped {
                     HStack(spacing: 8) {
-                        Text(message.author)
+                        Text(message.effectiveName)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                        Text(message.formattedTime)
+                            .foregroundColor(isOwn ? Color(hex: "E53935") : .white)
+                        Text(message.shortTime)
                             .font(.system(size: 11))
                             .foregroundColor(Color(hex: "5C5E66"))
                     }
@@ -226,88 +256,57 @@ struct MessageRow: View {
                     .font(.system(size: 15))
                     .foregroundColor(Color(hex: "DCDDDE"))
                     .fixedSize(horizontal: false, vertical: true)
-                + (message.edited ? Text(" (edited)").font(.system(size: 10)).foregroundColor(Color(hex: "5C5E66")) : Text(""))
-
-                if !message.reactions.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(message.reactions, id: \.emoji) { reaction in
-                            HStack(spacing: 4) {
-                                Text(reaction.emoji)
-                                Text("\(reaction.count)").font(.system(size: 12)).foregroundColor(Color(hex: "949BA4"))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(reaction.me ? Color(hex: "E53935").opacity(0.2) : Color(hex: "2B2D31"))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(reaction.me ? Color(hex: "E53935").opacity(0.5) : Color.clear, lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-                    .padding(.top, 2)
-                }
+                +
+                (message.edited
+                 ? Text(" (edited)")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(hex: "5C5E66"))
+                 : Text(""))
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, grouped ? 1 : 4)
-        .background(showActions ? Color.white.opacity(0.03) : Color.clear)
         .contextMenu {
             if isOwn {
-                Button(action: onEdit) { Label("Edit Message", systemImage: "pencil") }
-                Button(role: .destructive, action: onDelete) { Label("Delete Message", systemImage: "trash") }
+                Button(action: onEdit) {
+                    Label("Edit Message", systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete Message", systemImage: "trash")
+                }
             }
-            Button(action: {}) { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-            Button(action: {}) { Label("React", systemImage: "face.smiling") }
-            Button(action: {}) { Label("Copy Text", systemImage: "doc.on.doc") }
+            Button(action: {
+                UIPasteboard.general.string = message.content
+            }) {
+                Label("Copy Text", systemImage: "doc.on.doc")
+            }
         }
-        .onHover { showActions = $0 }
     }
 }
 
-// MARK: - Members sheet
+// MARK: - Member List Sheet
 
 struct MemberListSheet: View {
     let members: [ServerMember]
     @Environment(\.dismiss) var dismiss
 
-    var grouped: [(String, [ServerMember])] {
-        let online = members.filter { $0.status != .offline }
-        let offline = members.filter { $0.status == .offline }
-        var result: [(String, [ServerMember])] = []
-        if !online.isEmpty { result.append(("Online — \(online.count)", online)) }
-        if !offline.isEmpty { result.append(("Offline — \(offline.count)", offline)) }
-        return result
-    }
+    var online: [ServerMember] { members.filter { $0.statusEnum != .offline } }
+    var offline: [ServerMember] { members.filter { $0.statusEnum == .offline } }
 
     var body: some View {
         NavigationView {
             List {
-                ForEach(grouped, id: \.0) { section, members in
-                    Section(section) {
-                        ForEach(members) { m in
-                            HStack(spacing: 12) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    Circle()
-                                        .fill(m.status == .offline ? Color(hex: "2B2D31") : Color(hex: "E53935"))
-                                        .frame(width: 36, height: 36)
-                                        .overlay(Text(String(m.username.prefix(1)).uppercased())
-                                            .font(.system(size: 14, weight: .bold)).foregroundColor(.white))
-                                    Circle()
-                                        .fill(m.status.color)
-                                        .frame(width: 12, height: 12)
-                                        .overlay(Circle().stroke(Color(hex: "1E1F22"), lineWidth: 2))
-                                }
-                                VStack(alignment: .leading) {
-                                    Text(m.username).font(.system(size: 14, weight: .medium)).foregroundColor(.white)
-                                    if m.role != .member {
-                                        Text(m.role.rawValue).font(.system(size: 11)).foregroundColor(Color(hex: "E53935"))
-                                    }
-                                }
-                            }
-                        }
+                if !online.isEmpty {
+                    Section("Online — \(online.count)") {
+                        ForEach(online) { MemberRow(member: $0) }
+                    }
+                }
+                if !offline.isEmpty {
+                    Section("Offline — \(offline.count)") {
+                        ForEach(offline) { MemberRow(member: $0) }
                     }
                 }
             }
@@ -316,9 +315,51 @@ struct MemberListSheet: View {
             .background(Color(hex: "313338"))
             .navigationTitle("Members")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: Button("Done") { dismiss() }.foregroundColor(Color(hex: "E53935")))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(Color(hex: "E53935"))
+                }
+            }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+struct MemberRow: View {
+    let member: ServerMember
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(member.swiftAvatarColor)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Text(String(member.effectiveName.prefix(1)).uppercased())
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+                Circle()
+                    .fill(member.statusEnum.color)
+                    .frame(width: 11, height: 11)
+                    .overlay(Circle().stroke(Color(hex: "313338"), lineWidth: 2))
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(member.effectiveName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                if member.isOwner == true {
+                    Text("Owner")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "E53935"))
+                } else if let role = member.roles.first {
+                    Text(role.name)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "949BA4"))
+                }
+            }
+        }
     }
 }
 
@@ -332,45 +373,39 @@ struct VoiceChannelView: View {
     var body: some View {
         ZStack {
             Color(hex: "313338").ignoresSafeArea()
-            VStack(spacing: 24) {
+            VStack(spacing: 28) {
                 ZStack {
-                    Circle().fill(Color(hex: "2B2D31")).frame(width: 80, height: 80)
+                    Circle()
+                        .fill(Color(hex: "2B2D31"))
+                        .frame(width: 88, height: 88)
                     Image(systemName: "speaker.wave.3.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 34))
                         .foregroundColor(Color(hex: "949BA4"))
                 }
-                Text(channel.name).font(.system(size: 22, weight: .bold)).foregroundColor(.white)
-                Text(joined ? "Connected" : "Voice Channel")
-                    .font(.system(size: 14))
-                    .foregroundColor(Color(hex: "949BA4"))
-
+                VStack(spacing: 6) {
+                    Text(channel.name)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(joined ? "You're connected" : "Voice Channel")
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(hex: "949BA4"))
+                }
                 if joined {
                     HStack(spacing: 20) {
-                        Button(action: { isMuted.toggle() }) {
-                            VStack(spacing: 6) {
-                                Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
-                                    .font(.system(size: 20))
-                                Text(isMuted ? "Unmute" : "Mute").font(.system(size: 11))
-                            }
-                            .foregroundColor(isMuted ? Color(hex: "E53935") : Color(hex: "949BA4"))
-                            .frame(width: 72, height: 72)
-                            .background(Color(hex: "2B2D31"))
-                            .clipShape(Circle())
+                        VoiceButton(icon: isMuted ? "mic.slash.fill" : "mic.fill",
+                                    label: isMuted ? "Unmute" : "Mute",
+                                    isActive: isMuted,
+                                    color: isMuted ? "f23f43" : "4a4b50") {
+                            isMuted.toggle()
                         }
-                        Button(action: { joined = false }) {
-                            VStack(spacing: 6) {
-                                Image(systemName: "phone.down.fill").font(.system(size: 20))
-                                Text("Leave").font(.system(size: 11))
-                            }
-                            .foregroundColor(.white)
-                            .frame(width: 72, height: 72)
-                            .background(Color(hex: "f23f43"))
-                            .clipShape(Circle())
+                        VoiceButton(icon: "phone.down.fill", label: "Leave",
+                                    isActive: true, color: "f23f43") {
+                            joined = false
                         }
                     }
                 } else {
                     Button(action: { joined = true }) {
-                        Text("Join Voice Channel")
+                        Label("Join Voice", systemImage: "phone.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 28)
@@ -383,5 +418,31 @@ struct VoiceChannelView: View {
         }
         .navigationTitle(channel.name)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct VoiceButton: View {
+    let icon: String
+    let label: String
+    let isActive: Bool
+    let color: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(Color(hex: color))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 22))
+                            .foregroundColor(.white)
+                    )
+                Text(label)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: "949BA4"))
+            }
+        }
     }
 }

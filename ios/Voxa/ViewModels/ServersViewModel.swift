@@ -9,7 +9,7 @@ class ServersViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let storageKey = "voxa_servers"
+    private let storageKey = "voxa_servers_v2"
 
     init() {
         loadLocal()
@@ -22,7 +22,6 @@ class ServersViewModel: ObservableObject {
             servers = remote
             saveLocal()
         } catch {
-            // Fall back to local / mock data
             if servers.isEmpty {
                 servers = VoxaServer.mock
             }
@@ -47,24 +46,29 @@ class ServersViewModel: ObservableObject {
             selectServer(srv)
         } catch {
             // Offline: create locally
-            let id = UUID().uuidString
-            let channelId = UUID().uuidString
+            let id = "local_\(UUID().uuidString)"
+            let channelId = "ch_\(UUID().uuidString)"
             let srv = VoxaServer(
-                id: id,
-                name: name,
-                icon: nil,
-                ownerId: "local",
+                id: id, name: name, iconUrl: nil, iconColor: "#E53935",
+                description: nil, bannerUrl: nil, bannerColor: nil,
+                ownerId: "local", createdAt: nil, isPublic: false,
                 categories: [
-                    ServerCategory(id: UUID().uuidString, name: "Text Channels", channels: [
-                        VoxaChannel(id: channelId, name: "general", type: .text, unread: false, locked: false, members: nil)
+                    ServerCategory(id: "cat_\(UUID().uuidString)", name: "Text Channels", channels: [
+                        VoxaChannel(id: channelId, name: "general", type: "text", topic: nil)
                     ])
                 ],
-                members: [],
-                unread: false
+                members: [], roles: []
             )
             servers.append(srv)
             saveLocal()
             selectServer(srv)
+        }
+    }
+
+    func addServer(_ server: VoxaServer) async {
+        if !servers.contains(where: { $0.id == server.id }) {
+            servers.append(server)
+            saveLocal()
         }
     }
 
@@ -78,20 +82,20 @@ class ServersViewModel: ObservableObject {
         try? await APIClient.shared.deleteServer(id: server.id)
     }
 
-    func addChannel(to server: VoxaServer, name: String, type: VoxaChannel.ChannelType) async {
+    func addChannel(to server: VoxaServer, name: String, type: String) async {
         let channelId: String
         do {
-            let ch = try await APIClient.shared.createChannel(serverId: server.id, name: name, type: type.rawValue)
+            let ch = try await APIClient.shared.createChannel(serverId: server.id, name: name, type: type)
             channelId = ch.id
         } catch {
-            channelId = UUID().uuidString
+            channelId = "ch_\(UUID().uuidString)"
         }
 
         if let idx = servers.firstIndex(where: { $0.id == server.id }),
            let catIdx = servers[idx].categories.indices.first {
-            let ch = VoxaChannel(id: channelId, name: name, type: type, unread: false, locked: false, members: nil)
+            let ch = VoxaChannel(id: channelId, name: name, type: type, topic: nil)
             servers[idx].categories[catIdx].channels.append(ch)
-            if type == .text { selectedChannel = ch }
+            if type == "text" { selectedChannel = ch }
         }
         saveLocal()
     }

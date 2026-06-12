@@ -36,10 +36,10 @@ struct ProfileView: View {
                         HStack(spacing: 16) {
                             ZStack(alignment: .bottomTrailing) {
                                 Circle()
-                                    .fill(user.avatarColor)
+                                    .fill(user.swiftAvatarColor)
                                     .frame(width: 60, height: 60)
                                     .overlay(
-                                        Text(String(user.username.prefix(1)).uppercased())
+                                        Text(String(user.effectiveName.prefix(1)).uppercased())
                                             .font(.system(size: 24, weight: .black))
                                             .foregroundColor(.white)
                                     )
@@ -49,7 +49,7 @@ struct ProfileView: View {
                                     .overlay(Circle().stroke(Color(hex: "111214"), lineWidth: 2.5))
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(user.username)
+                                Text(user.effectiveName)
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundColor(.white)
                                 Text("#\(user.discriminator)")

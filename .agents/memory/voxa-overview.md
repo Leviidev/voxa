@@ -56,9 +56,22 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - Message density stored but ChatArea not yet wired to `data-msg-display` attribute (future work)
 - Notification prefs → `voxa_notif_prefs` in localStorage; Privacy prefs → `voxa_privacy_prefs`
 
+## iOS App (ios/)
+
+- `ios/Voxa.xcodeproj` — real Xcode project targeting iOS 16+, bundle ID `lol.voxa.app`
+- All Swift models in `Models.swift` align exactly with backend `shapeMessage`/`getServerWithChannels` camelCase JSON
+- API paths: messages → `/api/channels/:id/messages`, auth → `/api/auth/login|register|me`, servers → `/api/servers`
+- Real-time uses **polling** (3s interval) not WebSocket — avoids Socket.IO protocol complexity in native Swift
+- GitHub workflow (`.github/workflows/ios.yml`): simulator build always runs; IPA export only when `IOS_CERT_BASE64`, `IOS_PROFILE_BASE64`, `APPLE_TEAM_ID` secrets are set
+- `ios/ExportOptions.plist` uses `REPLACE_TEAM_ID` placeholder — `sed` replaces it in CI with `$APPLE_TEAM_ID`
+- `UserAvatarBubble`, `ServerIconView`, `ServerAcronymView` defined in `ServerListView.swift` — accessible across all files in same module without import
+- `User.swiftAvatarColor` and `ServerMember.swiftAvatarColor` are computed Color properties; `User.avatarColor` is `String?` (raw hex from API)
+
 ## Key Design Decisions
 
-- Server sidebar (220px) shows server **names** as full rows — intentionally NOT icon-only like Discord
+- Server sidebar (220px) is a **dark floating card**: `m-2 bg-[#111214] rounded-2xl shadow-2xl border border-white/[0.05]` — unique vs Discord
+- App layout outer bg: `#E8EAED` so dark sidebar "floats" against it
+- Server sidebar shows server **names** as full rows with icon + left red pill indicator for active
 - Login form uses `noValidate` to suppress browser-native validation messages
 - `mockData.js` still exists in `src/data/` but nothing imports it (orphan file, safe to delete later)
 

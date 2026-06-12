@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import Combine
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -8,17 +7,15 @@ class ChatViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isSending = false
     @Published var error: String?
-    @Published var typingUsers: [String] = []
 
     private var currentChannelId: String?
-    private var wsClient: WebSocketClient?
-    private let storageKey = "voxa_msgs_"
+    private var pollTask: Task<Void, Never>?
+    private let storageKey = "voxa_msgs_v2_"
 
     func load(channelId: String, token: String?) async {
         currentChannelId = channelId
         isLoading = true
 
-        // Load from cache first
         messages = loadLocal(channelId: channelId)
 
         do {
@@ -26,19 +23,13 @@ class ChatViewModel: ObservableObject {
             messages = remote
             saveLocal(channelId: channelId)
         } catch {
-            // Use mock data if API fails
             if messages.isEmpty {
                 messages = VoxaMessage.mockMessages(for: channelId)
-                saveLocal(channelId: channelId)
             }
         }
-
         isLoading = false
 
-        // Connect WebSocket if token available
-        if let token {
-            connectWebSocket(channelId: channelId, token: token)
-        }
+        startPolling(channelId: channelId)
     }
 
     func send(content: String, channelId: String, author: User) async {
@@ -47,16 +38,19 @@ class ChatViewModel: ObservableObject {
 
         let optimistic = VoxaMessage(
             id: "opt_\(UUID().uuidString)",
-            author: author.username,
-            authorId: author.id,
-            discriminator: author.discriminator,
             content: content,
+            authorId: author.id,
+            author: author.username,
+            displayName: author.displayName,
+            avatarUrl: author.avatarUrl,
+            avatarColor: author.avatarColor,
+            discriminator: author.discriminator,
+            channelId: channelId,
             timestamp: Date(),
             edited: false, editedAt: nil,
-            attachments: [], reactions: []
+            parentId: nil, replyCount: 0, reactions: nil
         )
         messages.append(optimistic)
-        saveLocal(channelId: channelId)
 
         do {
             let real = try await APIClient.shared.sendMessage(channelId: channelId, content: content)
@@ -65,65 +59,85 @@ class ChatViewModel: ObservableObject {
             }
             saveLocal(channelId: channelId)
         } catch {
-            // Keep the optimistic message, mark no action needed offline
+            // Keep optimistic message
         }
-
         isSending = false
     }
 
     func edit(message: VoxaMessage, newContent: String) async {
-        guard let idx = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        guard let channelId = message.channelId ?? currentChannelId,
+              let idx = messages.firstIndex(where: { $0.id == message.id }) else { return }
         messages[idx].content = newContent
         messages[idx].edited = true
-        if let channelId = currentChannelId { saveLocal(channelId: channelId) }
+        if let cid = currentChannelId { saveLocal(channelId: cid) }
 
         do {
-            let updated = try await APIClient.shared.editMessage(id: message.id, content: newContent)
-            messages[idx] = updated
+            let updated = try await APIClient.shared.editMessage(channelId: channelId,
+                                                                  messageId: message.id,
+                                                                  content: newContent)
+            if let i = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[i] = updated
+            }
         } catch {}
     }
 
     func delete(message: VoxaMessage) async {
+        guard let channelId = message.channelId ?? currentChannelId else { return }
         messages.removeAll { $0.id == message.id }
-        if let channelId = currentChannelId { saveLocal(channelId: channelId) }
-        try? await APIClient.shared.deleteMessage(id: message.id)
+        if let cid = currentChannelId { saveLocal(channelId: cid) }
+        try? await APIClient.shared.deleteMessage(channelId: channelId, messageId: message.id)
     }
 
-    // MARK: - WebSocket
+    // MARK: - Polling (every 3s when app is active)
 
-    private func connectWebSocket(channelId: String, token: String) {
-        wsClient?.disconnect()
-        wsClient = WebSocketClient()
-        wsClient?.onMessage = { [weak self] msg in
-            guard let self else { return }
-            Task { @MainActor in
-                if !self.messages.contains(where: { $0.id == msg.id }) {
-                    self.messages.append(msg)
-                    if let cid = self.currentChannelId { self.saveLocal(channelId: cid) }
-                }
+    private func startPolling(channelId: String) {
+        pollTask?.cancel()
+        pollTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled else { break }
+                do {
+                    let fresh = try await APIClient.shared.messages(channelId: channelId, limit: 50)
+                    if !Task.isCancelled {
+                        mergeMessages(fresh, channelId: channelId)
+                    }
+                } catch {}
             }
         }
-        wsClient?.connect(token: token, channelId: channelId)
+    }
+
+    private func mergeMessages(_ fresh: [VoxaMessage], channelId: String) {
+        var merged = messages
+        for msg in fresh {
+            if let idx = merged.firstIndex(where: { $0.id == msg.id }) {
+                merged[idx] = msg
+            } else if !merged.contains(where: { $0.id == msg.id }) {
+                merged.append(msg)
+            }
+        }
+        merged.removeAll { msg in
+            msg.id.hasPrefix("opt_") && fresh.contains(where: { $0.content == msg.content && $0.authorId == msg.authorId })
+        }
+        messages = merged.sorted { $0.timestamp < $1.timestamp }
+        saveLocal(channelId: channelId)
     }
 
     func disconnect() {
-        wsClient?.disconnect()
-        wsClient = nil
+        pollTask?.cancel()
+        pollTask = nil
     }
 
     // MARK: - Local Persistence
 
     private func saveLocal(channelId: String) {
-        let key = storageKey + channelId
-        let toSave = Array(messages.suffix(200)) // keep last 200
+        let toSave = Array(messages.suffix(200))
         if let data = try? JSONEncoder().encode(toSave) {
-            UserDefaults.standard.set(data, forKey: key)
+            UserDefaults.standard.set(data, forKey: storageKey + channelId)
         }
     }
 
     private func loadLocal(channelId: String) -> [VoxaMessage] {
-        let key = storageKey + channelId
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = UserDefaults.standard.data(forKey: storageKey + channelId),
               let msgs = try? JSONDecoder().decode([VoxaMessage].self, from: data) else { return [] }
         return msgs
     }

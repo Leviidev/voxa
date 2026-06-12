@@ -6,23 +6,34 @@ import SwiftUI
 struct User: Codable, Identifiable {
     let id: String
     var username: String
+    var displayName: String?
     var discriminator: String
     var email: String
-    var avatar: String?
-    var status: UserStatus
+    var avatarUrl: String?
+    var avatarColor: String?
+    var bannerUrl: String?
+    var bannerColor: String?
+    var status: String?
+    var customStatus: String?
     var bio: String?
-    var createdAt: String
+    var emailVerified: Bool?
+    var createdAt: String?
 
-    var displayTag: String { "\(username)#\(discriminator)" }
-    var avatarColor: Color {
+    var effectiveName: String { displayName ?? username }
+    var tag: String { "\(username)#\(discriminator)" }
+
+    var statusEnum: UserStatus { UserStatus(rawValue: status ?? "offline") ?? .offline }
+
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex) }
         let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
-        let idx = abs(username.hashValue) % colors.count
-        return colors[idx]
+        return colors[abs(username.hashValue) % colors.count]
     }
 }
 
 enum UserStatus: String, Codable {
     case online, idle, dnd, offline, invisible
+
     var label: String {
         switch self {
         case .online: return "Online"
@@ -32,6 +43,7 @@ enum UserStatus: String, Codable {
         case .invisible: return "Invisible"
         }
     }
+
     var color: Color {
         switch self {
         case .online: return Color(hex: "23a55a")
@@ -47,11 +59,17 @@ enum UserStatus: String, Codable {
 struct VoxaServer: Codable, Identifiable {
     let id: String
     var name: String
-    var icon: String?
+    var iconUrl: String?
+    var iconColor: String?
+    var description: String?
+    var bannerUrl: String?
+    var bannerColor: String?
     var ownerId: String
+    var createdAt: String?
+    var isPublic: Bool?
     var categories: [ServerCategory]
     var members: [ServerMember]
-    var unread: Bool
+    var roles: [ServerRole]
 
     var acronym: String {
         name.split(separator: " ")
@@ -62,7 +80,12 @@ struct VoxaServer: Codable, Identifiable {
     }
 
     var accentColor: Color {
-        let colors: [Color] = [.red, Color(hex: "1565C0"), Color(hex: "6A1B9A"), Color(hex: "2E7D32"), Color(hex: "E65100")]
+        if let hex = iconColor, !hex.isEmpty { return Color(hex: hex.replacingOccurrences(of: "#", with: "")) }
+        let colors: [Color] = [
+            Color(hex: "E53935"), Color(hex: "6366F1"),
+            Color(hex: "10B981"), Color(hex: "F59E0B"),
+            Color(hex: "3B82F6"), Color(hex: "8B5CF6"), Color(hex: "EC4899")
+        ]
         return colors[abs(name.hashValue) % colors.count]
     }
 
@@ -71,7 +94,7 @@ struct VoxaServer: Codable, Identifiable {
     }
 
     var firstTextChannel: VoxaChannel? {
-        allChannels.first(where: { $0.type == .text })
+        allChannels.first(where: { $0.type == "text" })
     }
 }
 
@@ -84,17 +107,37 @@ struct ServerCategory: Codable, Identifiable {
 struct ServerMember: Codable, Identifiable {
     let id: String
     var username: String
+    var displayName: String?
     var discriminator: String
-    var status: UserStatus
-    var role: MemberRole
-    var avatar: String?
+    var avatarUrl: String?
+    var avatarColor: String?
+    var status: String?
+    var isOwner: Bool?
+    var roles: [MemberRoleRef]
+
+    var effectiveName: String { displayName ?? username }
+    var statusEnum: UserStatus { UserStatus(rawValue: status ?? "offline") ?? .offline }
+
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex.replacingOccurrences(of: "#", with: "")) }
+        let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
+        return colors[abs(username.hashValue) % colors.count]
+    }
 }
 
-enum MemberRole: String, Codable {
-    case owner = "Owner"
-    case admin = "Admin"
-    case moderator = "Moderator"
-    case member = "Member"
+struct MemberRoleRef: Codable, Identifiable {
+    let id: String
+    var name: String
+    var color: String?
+}
+
+struct ServerRole: Codable, Identifiable {
+    let id: String
+    var name: String
+    var color: String?
+    var hoist: Bool?
+    var position: Int?
+    var isDefault: Bool?
 }
 
 // MARK: - Channel
@@ -102,13 +145,18 @@ enum MemberRole: String, Codable {
 struct VoxaChannel: Codable, Identifiable {
     let id: String
     var name: String
-    var type: ChannelType
-    var unread: Bool
-    var locked: Bool
-    var members: [String]?   // voice channel participants
+    var type: String    // "text" | "voice"
+    var topic: String?
 
-    enum ChannelType: String, Codable {
-        case text, voice, announcement, stage
+    var isText: Bool { type == "text" }
+    var isVoice: Bool { type == "voice" }
+
+    var icon: String {
+        switch type {
+        case "voice": return "speaker.wave.2"
+        case "announcement": return "megaphone"
+        default: return "number"
+        }
     }
 }
 
@@ -116,30 +164,25 @@ struct VoxaChannel: Codable, Identifiable {
 
 struct VoxaMessage: Codable, Identifiable {
     let id: String
-    var author: String
-    var authorId: String
-    var discriminator: String
     var content: String
+    var authorId: String
+    var author: String           // username
+    var displayName: String?
+    var avatarUrl: String?
+    var avatarColor: String?
+    var discriminator: String
+    var channelId: String?
     var timestamp: Date
     var edited: Bool
     var editedAt: Date?
-    var attachments: [Attachment]
-    var reactions: [Reaction]
+    var parentId: String?
+    var replyCount: Int?
+    var reactions: [String: ReactionData]?
 
-    struct Attachment: Codable, Identifiable {
-        let id: String
-        let url: String
-        let filename: String
-        let contentType: String
-    }
+    var effectiveName: String { displayName ?? author }
 
-    struct Reaction: Codable {
-        var emoji: String
-        var count: Int
-        var me: Bool
-    }
-
-    var avatarColor: Color {
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex.replacingOccurrences(of: "#", with: "")) }
         let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
         return colors[abs(author.hashValue) % colors.count]
     }
@@ -154,7 +197,7 @@ struct VoxaMessage: Codable, Identifiable {
             f.dateFormat = "h:mm a"
             return "Yesterday at \(f.string(from: timestamp))"
         } else {
-            f.dateFormat = "MM/dd/yyyy h:mm a"
+            f.dateFormat = "MM/dd/yyyy"
             return f.string(from: timestamp)
         }
     }
@@ -166,14 +209,9 @@ struct VoxaMessage: Codable, Identifiable {
     }
 }
 
-// MARK: - DM
-
-struct DirectMessage: Codable, Identifiable {
-    let id: String
-    var recipient: User
-    var lastMessage: String?
-    var lastMessageAt: Date?
-    var unread: Bool
+struct ReactionData: Codable {
+    var count: Int
+    var userIds: [String]
 }
 
 // MARK: - Auth
@@ -192,14 +230,14 @@ struct RegisterRequest: Codable {
     let email: String
     let username: String
     let password: String
-    let dob: String?
 }
 
 // MARK: - Color Extension
 
 extension Color {
     init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        if hex.hasPrefix("#") { hex = String(hex.dropFirst()) }
         var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
         let r, g, b: Double
@@ -209,7 +247,7 @@ extension Color {
             g = Double((int >> 8) & 0xFF) / 255
             b = Double(int & 0xFF) / 255
         default:
-            r = 1; g = 1; b = 1
+            r = 0.9; g = 0.2; b = 0.2
         }
         self.init(red: r, green: g, blue: b)
     }
@@ -220,69 +258,59 @@ extension Color {
 extension VoxaServer {
     static let mock: [VoxaServer] = [
         VoxaServer(
-            id: "srv_general",
+            id: "srv_1",
             name: "Voxa HQ",
-            icon: nil,
-            ownerId: "u_alex",
+            iconUrl: nil,
+            iconColor: "#E53935",
+            description: "The official Voxa community",
+            bannerUrl: nil,
+            bannerColor: nil,
+            ownerId: "u_1",
+            createdAt: nil,
+            isPublic: true,
             categories: [
-                ServerCategory(id: "cat_info", name: "Information", channels: [
-                    VoxaChannel(id: "ch_welcome", name: "welcome", type: .announcement, unread: false, locked: true, members: nil),
-                    VoxaChannel(id: "ch_rules", name: "rules", type: .announcement, unread: false, locked: true, members: nil),
-                ]),
-                ServerCategory(id: "cat_gen", name: "General", channels: [
-                    VoxaChannel(id: "ch_chat", name: "general", type: .text, unread: true, locked: false, members: nil),
-                    VoxaChannel(id: "ch_off", name: "off-topic", type: .text, unread: false, locked: false, members: nil),
-                    VoxaChannel(id: "ch_media", name: "media", type: .text, unread: false, locked: false, members: nil),
-                    VoxaChannel(id: "vc_lounge", name: "Lounge", type: .voice, unread: false, locked: false, members: ["Alex", "Sam"]),
+                ServerCategory(id: "cat_1", name: "General", channels: [
+                    VoxaChannel(id: "ch_1", name: "general", type: "text", topic: "Welcome to Voxa!"),
+                    VoxaChannel(id: "ch_2", name: "off-topic", type: "text", topic: nil),
+                    VoxaChannel(id: "vc_1", name: "Lounge", type: "voice", topic: nil),
                 ]),
             ],
             members: [
-                ServerMember(id: "u_alex", username: "Alex", discriminator: "0001", status: .online, role: .admin),
-                ServerMember(id: "u_sam", username: "Sam", discriminator: "0234", status: .online, role: .member),
-                ServerMember(id: "u_jordan", username: "Jordan", discriminator: "1337", status: .idle, role: .member),
-                ServerMember(id: "u_casey", username: "Casey", discriminator: "4242", status: .dnd, role: .moderator),
-                ServerMember(id: "u_morgan", username: "Morgan", discriminator: "8888", status: .offline, role: .member),
+                ServerMember(id: "u_1", username: "Alex", displayName: "Alex",
+                             discriminator: "0001", avatarUrl: nil, avatarColor: "#E53935",
+                             status: "online", isOwner: true, roles: []),
+                ServerMember(id: "u_2", username: "Sam", displayName: "Sam",
+                             discriminator: "0234", avatarUrl: nil, avatarColor: "#6366F1",
+                             status: "online", isOwner: false, roles: []),
+                ServerMember(id: "u_3", username: "Jordan", displayName: "Jordan",
+                             discriminator: "1337", avatarUrl: nil, avatarColor: "#10B981",
+                             status: "idle", isOwner: false, roles: []),
             ],
-            unread: true
-        ),
-        VoxaServer(
-            id: "srv_gaming",
-            name: "Gaming Zone",
-            icon: nil,
-            ownerId: "u_sam",
-            categories: [
-                ServerCategory(id: "cat_g1", name: "General", channels: [
-                    VoxaChannel(id: "ch_g1", name: "general", type: .text, unread: false, locked: false, members: nil),
-                    VoxaChannel(id: "ch_g2", name: "clips", type: .text, unread: false, locked: false, members: nil),
-                    VoxaChannel(id: "vc_squad", name: "Squad Up", type: .voice, unread: false, locked: false, members: ["Morgan"]),
-                ]),
-            ],
-            members: [
-                ServerMember(id: "u_sam", username: "Sam", discriminator: "0234", status: .online, role: .admin),
-                ServerMember(id: "u_morgan", username: "Morgan", discriminator: "8888", status: .online, role: .member),
-            ],
-            unread: false
+            roles: []
         ),
     ]
 }
 
 extension VoxaMessage {
     static func mockMessages(for channelId: String) -> [VoxaMessage] {
-        guard channelId == "ch_chat" else { return [] }
+        guard channelId == "ch_1" else { return [] }
         let now = Date()
         return [
-            VoxaMessage(id: "m1", author: "Alex", authorId: "u_alex", discriminator: "0001",
-                        content: "Welcome to Voxa HQ everyone! 🎉",
-                        timestamp: now.addingTimeInterval(-7200), edited: false, editedAt: nil, attachments: [], reactions: []),
-            VoxaMessage(id: "m2", author: "Sam", authorId: "u_sam", discriminator: "0234",
-                        content: "This is awesome! Love the red theme 🔴",
-                        timestamp: now.addingTimeInterval(-5400), edited: false, editedAt: nil, attachments: [], reactions: []),
-            VoxaMessage(id: "m3", author: "Jordan", authorId: "u_jordan", discriminator: "1337",
-                        content: "Finally a Discord alternative that actually looks good",
-                        timestamp: now.addingTimeInterval(-2700), edited: false, editedAt: nil, attachments: [], reactions: []),
-            VoxaMessage(id: "m4", author: "Alex", authorId: "u_alex", discriminator: "0001",
-                        content: "Voice quality is sub-50ms latency globally 🚀",
-                        timestamp: now.addingTimeInterval(-1500), edited: false, editedAt: nil, attachments: [], reactions: []),
+            VoxaMessage(id: "m1", content: "Welcome to Voxa HQ! 🎉",
+                        authorId: "u_1", author: "Alex", displayName: "Alex",
+                        avatarUrl: nil, avatarColor: "#E53935", discriminator: "0001",
+                        channelId: channelId, timestamp: now.addingTimeInterval(-7200),
+                        edited: false, editedAt: nil, parentId: nil, replyCount: 0, reactions: nil),
+            VoxaMessage(id: "m2", content: "This looks amazing! Love the red theme 🔴",
+                        authorId: "u_2", author: "Sam", displayName: "Sam",
+                        avatarUrl: nil, avatarColor: "#6366F1", discriminator: "0234",
+                        channelId: channelId, timestamp: now.addingTimeInterval(-5400),
+                        edited: false, editedAt: nil, parentId: nil, replyCount: 0, reactions: nil),
+            VoxaMessage(id: "m3", content: "Finally a real Discord alternative that actually ships",
+                        authorId: "u_3", author: "Jordan", displayName: "Jordan",
+                        avatarUrl: nil, avatarColor: "#10B981", discriminator: "1337",
+                        channelId: channelId, timestamp: now.addingTimeInterval(-1800),
+                        edited: false, editedAt: nil, parentId: nil, replyCount: 0, reactions: nil),
         ]
     }
 }
