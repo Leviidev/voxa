@@ -28,10 +28,45 @@ export const api = {
     request('/auth/register', { method: 'POST', body: JSON.stringify({ email, username, password }) }),
   me: () => request('/auth/me'),
 
+  // Users / Profile
+  updateProfile: (fields) =>
+    request('/users/me', { method: 'PATCH', body: JSON.stringify(fields) }),
+  getUser: (id) => request(`/users/${id}`),
+
   // Servers
   getServers: () => request('/servers'),
   createServer: (name) => request('/servers', { method: 'POST', body: JSON.stringify({ name }) }),
+  getServer: (id) => request(`/servers/${id}`),
+  updateServer: (id, fields) =>
+    request(`/servers/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }),
   deleteServer: (id) => request(`/servers/${id}`, { method: 'DELETE' }),
+  leaveServer: (id) => request(`/servers/${id}/leave`, { method: 'POST' }),
+
+  // Members
+  kickMember: (serverId, userId) =>
+    request(`/servers/${serverId}/members/${userId}`, { method: 'DELETE' }),
+
+  // Roles
+  getRoles: (serverId) => request(`/servers/${serverId}/roles`),
+  createRole: (serverId, data) =>
+    request(`/servers/${serverId}/roles`, { method: 'POST', body: JSON.stringify(data) }),
+  updateRole: (serverId, roleId, data) =>
+    request(`/servers/${serverId}/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRole: (serverId, roleId) =>
+    request(`/servers/${serverId}/roles/${roleId}`, { method: 'DELETE' }),
+  assignRole: (serverId, userId, roleId) =>
+    request(`/servers/${serverId}/members/${userId}/roles/${roleId}`, { method: 'PUT' }),
+  removeRole: (serverId, userId, roleId) =>
+    request(`/servers/${serverId}/members/${userId}/roles/${roleId}`, { method: 'DELETE' }),
+
+  // Invites
+  getInvites: (serverId) => request(`/servers/${serverId}/invites`),
+  createInvite: (serverId) =>
+    request(`/servers/${serverId}/invites`, { method: 'POST' }),
+  deleteInvite: (serverId, code) =>
+    request(`/servers/${serverId}/invites/${code}`, { method: 'DELETE' }),
+  joinByInvite: (code) =>
+    request(`/invites/${code}/join`, { method: 'POST' }),
 
   // Channels
   createChannel: (serverId, name, type) =>

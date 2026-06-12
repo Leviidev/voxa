@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import CreateChannelModal from './CreateChannelModal.jsx'
+import ServerSettingsModal from './ServerSettingsModal.jsx'
 import clsx from 'clsx'
 
 export default function ChannelSidebar() {
@@ -13,6 +14,7 @@ export default function ChannelSidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [showServerSettings, setShowServerSettings] = useState(false)
 
   const isMe = !serverId
 
@@ -20,13 +22,19 @@ export default function ChannelSidebar() {
     <>
       <div className="w-[220px] bg-[#F7F8FA] border-r border-[#E3E5E8] flex flex-col shrink-0">
         {/* Header */}
-        <div className="h-12 px-4 flex items-center justify-between border-b border-[#E3E5E8] shrink-0">
+        <div className="h-12 px-4 flex items-center justify-between border-b border-[#E3E5E8] shrink-0 group">
           {isMe ? (
             <span className="font-bold text-[#1A1B1E] text-sm">Direct Messages</span>
           ) : (
             <>
-              <span className="font-bold text-[#1A1B1E] text-sm truncate">{server?.name ?? '...'}</span>
-              <ChevronDown size={14} className="text-[#96989D] shrink-0" />
+              <span className="font-bold text-[#1A1B1E] text-sm truncate flex-1">{server?.name ?? '…'}</span>
+              <button
+                onClick={() => setShowServerSettings(true)}
+                title="Server Settings"
+                className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-all shrink-0 ml-1"
+              >
+                <Settings size={13} />
+              </button>
             </>
           )}
         </div>
@@ -54,6 +62,10 @@ export default function ChannelSidebar() {
 
       {showCreateChannel && serverId && (
         <CreateChannelModal serverId={serverId} onClose={() => setShowCreateChannel(false)} />
+      )}
+
+      {showServerSettings && server && (
+        <ServerSettingsModal server={server} onClose={() => setShowServerSettings(false)} />
       )}
     </>
   )
@@ -98,8 +110,7 @@ function Category({ cat, channelId, navigate, serverId, onAddChannel }) {
         >
           {collapsed
             ? <ChevronRight size={10} className="shrink-0" />
-            : <ChevronDown size={10} className="shrink-0" />
-          }
+            : <ChevronDown size={10} className="shrink-0" />}
           <span className="text-[10px] font-bold uppercase tracking-wider ml-0.5">{cat.name}</span>
         </button>
         <button
@@ -139,9 +150,6 @@ function ChannelRow({ ch, active, navigate, serverId }) {
       <Icon size={14} className="shrink-0" />
       <span className="text-sm font-medium flex-1 truncate">{ch.name}</span>
       {ch.locked && <Lock size={11} className="shrink-0 opacity-60" />}
-      {ch.unread && !active && (
-        <div className="w-2 h-2 rounded-full bg-[#1A1B1E] shrink-0" />
-      )}
     </div>
   )
 }
@@ -150,28 +158,29 @@ function UserPanel({ user, logout, navigate }) {
   const [muted, setMuted] = useState(false)
   const [deafened, setDeafened] = useState(false)
 
-  const colors = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
-  const color = user ? colors[user.username?.charCodeAt(0) % colors.length] : '#E53935'
+  const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
+  const color = user?.avatarColor ?? (user ? COLORS[user.username?.charCodeAt(0) % COLORS.length] : '#E53935')
 
   if (!user) return null
   return (
     <div className="h-14 bg-[#E3E5E8] px-3 flex items-center gap-2 shrink-0 border-t border-[#D5D7DC]">
-      <div
-        className="relative cursor-pointer shrink-0"
-        onClick={() => navigate('/voxa/me')}
-      >
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs"
-          style={{ background: color }}
-        >
-          {user.username?.[0]?.toUpperCase()}
+      <div className="relative cursor-pointer shrink-0" onClick={() => navigate('/voxa/me')}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden"
+          style={{ background: user.avatarUrl ? undefined : color }}>
+          {user.avatarUrl
+            ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            : (user.displayName ?? user.username)?.[0]?.toUpperCase()}
         </div>
         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#23a55a] border-2 border-[#E3E5E8]" />
       </div>
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/voxa/me')}>
-        <div className="text-xs font-semibold text-[#1A1B1E] truncate leading-tight">{user.username}</div>
-        <div className="text-[10px] text-[#96989D] truncate">#{user.discriminator}</div>
+        <div className="text-xs font-semibold text-[#1A1B1E] truncate leading-tight">
+          {user.displayName ?? user.username}
+        </div>
+        <div className="text-[10px] text-[#96989D] truncate">
+          {user.customStatus || `#${user.discriminator}`}
+        </div>
       </div>
 
       <div className="flex items-center gap-0.5">
@@ -181,7 +190,7 @@ function UserPanel({ user, logout, navigate }) {
         <PanelBtn label={deafened ? 'Undeafen' : 'Deafen'} onClick={() => setDeafened(v => !v)} active={deafened}>
           <Headphones size={14} />
         </PanelBtn>
-        <PanelBtn label="Settings" onClick={() => navigate('/voxa/me')}>
+        <PanelBtn label="User Settings" onClick={() => navigate('/voxa/me')}>
           <Settings size={14} />
         </PanelBtn>
       </div>

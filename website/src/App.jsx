@@ -4,6 +4,7 @@ import Login from './pages/Login.jsx'
 import AppLayout from './pages/AppLayout.jsx'
 import Me from './pages/Me.jsx'
 import ServerView from './pages/ServerView.jsx'
+import InviteJoin from './pages/InviteJoin.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
 
@@ -14,6 +15,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/invite/:code" element={<InviteJoin />} />
           <Route path="/voxa" element={<AppLayout />}>
             <Route index element={<Navigate to="/voxa/me" replace />} />
             <Route path="me" element={<Me />} />
