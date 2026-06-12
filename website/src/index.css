@@ -4,6 +4,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ─── CSS Variables ───────────────────────────────────────────────────────── */
+:root {
+  --accent: #E53935;
+  --accent-dark: #C62828;
+  --accent-subtle: #E5393518;
+  --chat-font-size: 14px;
+}
+
 html, body, #root {
   height: 100%;
   width: 100%;
@@ -18,7 +26,28 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Thin scrollbar */
+/* ─── Accent Color Utilities ─────────────────────────────────────────────── */
+.v-accent-bg { background-color: var(--accent) !important; }
+.v-accent-bg:hover { background-color: var(--accent-dark) !important; }
+.v-accent-bg:disabled { opacity: 0.5; }
+.v-accent-text { color: var(--accent) !important; }
+.v-accent-border { border-color: var(--accent) !important; }
+.v-accent-ring { box-shadow: 0 0 0 3px var(--accent-subtle) !important; }
+
+/* ─── Reduce Motion ──────────────────────────────────────────────────────── */
+[data-reduce-motion="true"] * {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ─── Font Size ──────────────────────────────────────────────────────────── */
+.chat-msg-text { font-size: var(--chat-font-size); }
+
+/* ─── Message Density ────────────────────────────────────────────────────── */
+[data-msg-display="compact"] .msg-avatar-col { display: none !important; }
+[data-msg-display="compact"] .msg-row { padding-top: 1px !important; padding-bottom: 1px !important; }
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d3d8; border-radius: 4px; }
@@ -26,7 +55,7 @@ body {
 
 .landing-scroll { overflow-y: auto; overflow-x: hidden; }
 .landing-scroll::-webkit-scrollbar { width: 6px; }
-.landing-scroll::-webkit-scrollbar-thumb { background: #E53935; border-radius: 4px; }
+.landing-scroll::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
 
 .scrollable { overflow-y: auto; overflow-x: hidden; }
 
@@ -39,33 +68,73 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin 0.7s linear infinite; }
 
-/* ─── Dark Mode ───────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE
+   Overrides Tailwind arbitrary-value classes that use hardcoded hex colors.
+   The .dark class is toggled on <html> by ThemeContext.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Body & Root ────────────────────────────────────────────────────────── */
 .dark body { background: #1E2124; color: #DCDDDE; }
 
-.dark .bg-white { background-color: #36393F !important; }
+/* ─── Backgrounds ────────────────────────────────────────────────────────── */
+.dark .bg-white   { background-color: #36393F !important; }
 .dark .bg-\[\#F7F8FA\] { background-color: #2C2F33 !important; }
 .dark .bg-\[\#F2F3F5\] { background-color: #23272A !important; }
-.dark .bg-\[\#E3E5E8\] { background-color: #2C2F33 !important; }
 .dark .bg-\[\#EAEBEE\] { background-color: #3C4043 !important; }
+.dark .bg-\[\#E3E5E8\] { background-color: #2C2F33 !important; }
 .dark .bg-\[\#E0E2E6\] { background-color: #42464D !important; }
 .dark .bg-\[\#DADCDF\] { background-color: #3C4043 !important; }
 .dark .bg-\[\#D5D7DC\] { background-color: #40444B !important; }
+.dark .bg-\[\#1A1B1E\] { background-color: #DCDDDE !important; }
 
+/* ─── Hover backgrounds ──────────────────────────────────────────────────── */
+.dark .hover\:bg-white:hover          { background-color: #42464D !important; }
+.dark .hover\:bg-\[\#EAEBEE\]:hover   { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#F2F3F5\]:hover   { background-color: #32353A !important; }
+.dark .hover\:bg-\[\#DADCDF\]:hover   { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#D5D7DC\]:hover   { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#F7F8FA\]:hover   { background-color: #32353A !important; }
+.dark .hover\:bg-\[\#E3E5E8\]:hover   { background-color: #3C4043 !important; }
+.dark .hover\:bg-\[\#E0E2E6\]:hover   { background-color: #42464D !important; }
+
+/* ─── Text colors ────────────────────────────────────────────────────────── */
+.dark .text-\[\#1A1B1E\]  { color: #DCDDDE !important; }
+.dark .text-\[\#313439\]  { color: #DCDDDE !important; }
+.dark .text-\[\#5C6068\]  { color: #B9BBBE !important; }
+.dark .text-\[\#96989D\]  { color: #72767D !important; }
+
+.dark .hover\:text-\[\#1A1B1E\]:hover { color: #FFFFFF !important; }
+.dark .hover\:text-\[\#5C6068\]:hover  { color: #DCDDDE !important; }
+
+/* ─── Borders ────────────────────────────────────────────────────────────── */
 .dark .border-\[\#E3E5E8\] { border-color: #40444B !important; }
 .dark .border-\[\#D5D7DC\] { border-color: #40444B !important; }
 .dark .border-\[\#E0E2E6\] { border-color: #40444B !important; }
+.dark .divide-\[\#E3E5E8\] > * + * { border-color: #40444B !important; }
 
-.dark .text-\[\#1A1B1E\] { color: #DCDDDE !important; }
-.dark .text-\[\#313439\] { color: #DCDDDE !important; }
-.dark .text-\[\#5C6068\] { color: #B9BBBE !important; }
-.dark .text-\[\#96989D\] { color: #72767D !important; }
+/* ─── Inputs ─────────────────────────────────────────────────────────────── */
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="search"],
+.dark textarea,
+.dark select {
+  color: #DCDDDE !important;
+  background-color: #2C2F33 !important;
+  border-color: #40444B !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #72767D !important; }
 
-.dark .hover\:bg-\[\#EAEBEE\]:hover { background-color: #3C4043 !important; }
-.dark .hover\:bg-\[\#F2F3F5\]:hover { background-color: #3C4043 !important; }
-.dark .hover\:bg-\[\#DADCDF\]:hover { background-color: #3C4043 !important; }
-.dark .hover\:bg-\[\#D5D7DC\]:hover { background-color: #3C4043 !important; }
-.dark .hover\:text-\[\#1A1B1E\]:hover { color: #DCDDDE !important; }
-.dark .hover\:text-\[\#5C6068\]:hover { color: #B9BBBE !important; }
-
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
 .dark ::-webkit-scrollbar-thumb { background: #40444B; }
 .dark ::-webkit-scrollbar-thumb:hover { background: #72767D; }
+
+/* ─── Utility: keep red/green/amber semantic colors in dark mode ─────────── */
+.dark .bg-red-50    { background-color: #3d1a1a !important; }
+.dark .bg-green-100 { background-color: #1a3d2a !important; }
+.dark .bg-amber-50  { background-color: #3d2d10 !important; }
+.dark .border-amber-200 { border-color: #7a5520 !important; }
+.dark .text-amber-700   { color: #f6c87c !important; }
+.dark .bg-indigo-100    { background-color: #1e2040 !important; }

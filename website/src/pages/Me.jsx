@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun, Check, Type, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
@@ -148,49 +148,84 @@ function AddFriend() {
 }
 
 const settingsSections = [
-  { id: 'account', label: 'My Account', icon: UserCircle },
-  { id: 'profile', label: 'Edit Profile', icon: Edit3 },
-  { id: 'privacy', label: 'Privacy & Safety', icon: Shield },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'account',       label: 'My Account',       icon: UserCircle },
+  { id: 'profile',       label: 'Edit Profile',      icon: Edit3 },
+  { id: 'appearance',    label: 'Appearance',         icon: Palette },
+  { id: 'notifications', label: 'Notifications',      icon: Bell },
+  { id: 'privacy',       label: 'Privacy & Safety',   icon: Shield },
 ]
 
 function SettingsPanel({ user, onClose, onLogout, onEditProfile }) {
   const [section, setSection] = useState('account')
+  const current = settingsSections.find(s => s.id === section)
   return (
     <div className="flex-1 flex overflow-hidden bg-white">
+      {/* Sidebar */}
       <div className="w-56 bg-[#F7F8FA] border-r border-[#E3E5E8] overflow-y-auto scrollable py-4 px-2 shrink-0">
         <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] px-2 mb-2">User Settings</div>
         {settingsSections.map(s => (
           <button key={s.id}
             onClick={() => s.id === 'profile' ? onEditProfile() : setSection(s.id)}
             className={clsx('w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left',
-              section === s.id ? 'bg-[#E0E2E6] text-[#1A1B1E]' : 'text-[#5C6068] hover:bg-[#EAEBEE] hover:text-[#1A1B1E]')}>
+              section === s.id && s.id !== 'profile'
+                ? 'bg-[#E0E2E6] text-[#1A1B1E]'
+                : 'text-[#5C6068] hover:bg-[#EAEBEE] hover:text-[#1A1B1E]')}>
             <s.icon size={15} />{s.label}
           </button>
         ))}
         <div className="h-px bg-[#E3E5E8] my-3 mx-2" />
-        <button onClick={onLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-[#E53935] hover:bg-[#E53935]/10 transition-colors">
+        <button onClick={onLogout}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
+          style={{ color: 'var(--accent)' }}>
           <LogOut size={15} /> Log Out
         </button>
       </div>
+
+      {/* Content */}
       <div className="flex-1 overflow-y-auto scrollable">
         <div className="max-w-2xl mx-auto px-8 py-8">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-xl font-black text-[#1A1B1E] capitalize">{settingsSections.find(s => s.id === section)?.label ?? section}</h1>
-            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-[#F2F3F5] hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors border border-[#E3E5E8]">
+            <h1 className="text-xl font-black text-[#1A1B1E]">{current?.label ?? section}</h1>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-xl bg-[#F2F3F5] hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors border border-[#E3E5E8]">
               <X size={15} />
             </button>
           </div>
-          {section === 'account' && <AccountSettings user={user} onEditProfile={onEditProfile} />}
+          {section === 'account'       && <AccountSettings user={user} onEditProfile={onEditProfile} />}
+          {section === 'appearance'    && <AppearanceSettings />}
           {section === 'notifications' && <NotificationSettings />}
-          {section === 'appearance' && <AppearanceSettings />}
-          {!['account', 'notifications', 'appearance'].includes(section) && (
-            <p className="text-[#96989D] text-sm">This section is coming soon.</p>
-          )}
+          {section === 'privacy'       && <PrivacySettings />}
         </div>
       </div>
     </div>
+  )
+}
+
+/* ─── Reusable helpers ────────────────────────────────────────────────────── */
+function SectionLabel({ children, className = '' }) {
+  return (
+    <h3 className={clsx('text-[10px] font-bold uppercase tracking-widest text-[#96989D] mb-3', className)}>
+      {children}
+    </h3>
+  )
+}
+
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={clsx(
+        'relative flex items-center w-11 h-6 rounded-full transition-colors shrink-0 focus:outline-none',
+        !checked && 'bg-[#E3E5E8]'
+      )}
+      style={checked ? { backgroundColor: 'var(--accent)' } : {}}>
+      <span className={clsx(
+        'absolute w-4 h-4 bg-white rounded-full shadow-sm transition-transform',
+        checked ? 'translate-x-6' : 'translate-x-1'
+      )} />
+    </button>
   )
 }
 
@@ -666,55 +701,272 @@ function LoginHistorySection() {
   )
 }
 
-function NotificationSettings() {
+/* ─── Appearance ──────────────────────────────────────────────────────────── */
+
+const ACCENT_PRESETS = [
+  { name: 'Red',    color: '#E53935' },
+  { name: 'Orange', color: '#F97316' },
+  { name: 'Amber',  color: '#F59E0B' },
+  { name: 'Green',  color: '#22C55E' },
+  { name: 'Teal',   color: '#14B8A6' },
+  { name: 'Blue',   color: '#3B82F6' },
+  { name: 'Indigo', color: '#6366F1' },
+  { name: 'Purple', color: '#A855F7' },
+  { name: 'Pink',   color: '#EC4899' },
+  { name: 'Slate',  color: '#64748B' },
+]
+
+function AppearanceSettings() {
+  const { theme, accentColor, fontSize, messageDisplay, reduceMotion, set } = useTheme()
+  const [customHex, setCustomHex] = useState('')
+  const [customError, setCustomError] = useState('')
+
+  const applyCustom = () => {
+    const hex = customHex.startsWith('#') ? customHex : '#' + customHex
+    if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) { setCustomError('Enter a valid 6-digit hex, e.g. #FF5733'); return }
+    set('accentColor', hex)
+    setCustomError('')
+    setCustomHex('')
+  }
+
   return (
-    <div className="space-y-3">
-      {[
-        { label: 'Desktop notifications', desc: 'Get notified when you receive a message' },
-        { label: 'Unread badge', desc: 'Show a badge on the browser tab' },
-        { label: 'Message sounds', desc: 'Play sounds for new messages' },
-      ].map(s => (
-        <div key={s.label} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
-          <div className="mr-8">
-            <div className="font-semibold text-[#1A1B1E] text-sm">{s.label}</div>
-            <div className="text-[#96989D] text-xs mt-0.5">{s.desc}</div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer shrink-0">
-            <input type="checkbox" defaultChecked className="sr-only peer" />
-            <div className="w-10 h-6 bg-[#E3E5E8] peer-checked:bg-[#E53935] rounded-full transition-colors after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
-          </label>
+    <div className="space-y-8">
+
+      {/* ── Theme ── */}
+      <div>
+        <SectionLabel>Theme</SectionLabel>
+        <div className="flex gap-3">
+          {[{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }].map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => set('theme', id)}
+              className={clsx('flex-1 flex items-center justify-center gap-2.5 py-3.5 rounded-xl border-2 text-sm font-medium transition-all',
+                theme !== id && 'border-[#E3E5E8] bg-[#F7F8FA] text-[#5C6068] hover:bg-[#F2F3F5]')}
+              style={theme === id ? { borderColor: 'var(--accent)', color: 'var(--accent)', backgroundColor: 'var(--accent-subtle)' } : {}}>
+              <Icon size={15} />
+              {label}
+              {theme === id && <Check size={13} strokeWidth={3} />}
+            </button>
+          ))}
         </div>
-      ))}
+      </div>
+
+      {/* ── Accent Color ── */}
+      <div>
+        <SectionLabel>Accent Color</SectionLabel>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {ACCENT_PRESETS.map(({ name, color }) => (
+            <button key={color} title={name} onClick={() => set('accentColor', color)}
+              className="w-9 h-9 rounded-xl transition-all hover:scale-110 relative border-2"
+              style={{
+                background: color,
+                borderColor: accentColor === color ? 'var(--accent-dark)' : 'transparent',
+                boxShadow: accentColor === color ? `0 0 0 3px ${color}40` : 'none',
+              }}>
+              {accentColor === color && <Check size={14} className="absolute inset-0 m-auto text-white" strokeWidth={3} />}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={customHex}
+            onChange={e => { setCustomHex(e.target.value); setCustomError('') }}
+            onKeyDown={e => e.key === 'Enter' && applyCustom()}
+            placeholder="#FF5733 — custom hex color"
+            className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none placeholder:text-[#96989D] font-mono"
+          />
+          <button onClick={applyCustom} className="v-accent-bg text-white px-4 py-2 rounded-xl text-sm font-semibold shrink-0">
+            Apply
+          </button>
+        </div>
+        {customError && <p className="text-red-500 text-xs mt-1">{customError}</p>}
+        <p className="text-[#96989D] text-xs mt-2">Used for buttons, active states, and highlights throughout the app.</p>
+      </div>
+
+      {/* ── Font Size ── */}
+      <div>
+        <SectionLabel>Chat Font Size</SectionLabel>
+        <div className="flex gap-2">
+          {[
+            { id: 'small',  label: 'Small',   size: '11px' },
+            { id: 'medium', label: 'Medium',  size: '13px' },
+            { id: 'large',  label: 'Large',   size: '15px' },
+            { id: 'xlarge', label: 'X-Large', size: '17px' },
+          ].map(({ id, label, size }) => (
+            <button key={id} onClick={() => set('fontSize', id)}
+              className={clsx('flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-sm font-medium transition-all',
+                fontSize !== id && 'border-[#E3E5E8] bg-[#F7F8FA] text-[#5C6068] hover:bg-[#F2F3F5]')}
+              style={fontSize === id ? { borderColor: 'var(--accent)', color: 'var(--accent)', backgroundColor: 'var(--accent-subtle)' } : {}}>
+              <span style={{ fontSize: size }} className="font-bold leading-none">Aa</span>
+              <span className="text-[10px]">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Message Display ── */}
+      <div>
+        <SectionLabel>Message Display</SectionLabel>
+        <div className="flex gap-3">
+          {[
+            { id: 'cozy',    label: 'Cozy',    desc: 'Avatars shown, spacious layout' },
+            { id: 'compact', label: 'Compact', desc: 'Dense layout, no avatars' },
+          ].map(({ id, label, desc }) => (
+            <button key={id} onClick={() => set('messageDisplay', id)}
+              className={clsx('flex-1 text-left px-4 py-3.5 rounded-xl border-2 transition-all',
+                messageDisplay !== id && 'border-[#E3E5E8] bg-[#F7F8FA]')}
+              style={messageDisplay === id ? { borderColor: 'var(--accent)', backgroundColor: 'var(--accent-subtle)' } : {}}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <MessageSquare size={13} style={messageDisplay === id ? { color: 'var(--accent)' } : { color: '#96989D' }} />
+                <span className="font-semibold text-[#1A1B1E] text-sm">{label}</span>
+                {messageDisplay === id && <Check size={12} strokeWidth={3} style={{ color: 'var(--accent)' }} />}
+              </div>
+              <div className="text-[#96989D] text-xs">{desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Accessibility ── */}
+      <div>
+        <SectionLabel>Accessibility</SectionLabel>
+        <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
+          <div className="mr-8">
+            <div className="font-semibold text-[#1A1B1E] text-sm">Reduce motion</div>
+            <div className="text-[#96989D] text-xs mt-0.5">Minimize animations and transitions across the app</div>
+          </div>
+          <Toggle checked={reduceMotion} onChange={v => set('reduceMotion', v)} />
+        </div>
+      </div>
     </div>
   )
 }
 
-function AppearanceSettings() {
-  const { theme, setTheme } = useTheme()
+/* ─── Notifications ───────────────────────────────────────────────────────── */
+
+const NOTIF_ITEMS = [
+  { key: 'desktop',  label: 'Desktop notifications', desc: 'Get a system notification for new messages',       needsPermission: true, defaultOn: false },
+  { key: 'sounds',   label: 'Message sounds',         desc: 'Play a sound when a new message arrives',          needsPermission: false, defaultOn: true  },
+  { key: 'preview',  label: 'Message preview',        desc: 'Show message content in desktop notifications',    needsPermission: false, defaultOn: true  },
+  { key: 'badge',    label: 'Unread badge',            desc: 'Show unread count on the browser tab title',       needsPermission: false, defaultOn: true  },
+  { key: 'mentions', label: 'Mention highlights',      desc: 'Notify when someone mentions your username',       needsPermission: false, defaultOn: true  },
+]
+
+function NotificationSettings() {
+  const [prefs, setPrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('voxa_notif_prefs') || '{}') } catch { return {} }
+  })
+  const [permDenied, setPermDenied] = useState(false)
+
+  const toggle = async (key, needsPermission, defaultOn) => {
+    const current = prefs[key] ?? defaultOn
+    if (!current && needsPermission) {
+      if (!('Notification' in window)) return
+      const perm = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission()
+      if (perm !== 'granted') { setPermDenied(true); setTimeout(() => setPermDenied(false), 4000); return }
+    }
+    const updated = { ...prefs, [key]: !current }
+    setPrefs(updated)
+    localStorage.setItem('voxa_notif_prefs', JSON.stringify(updated))
+  }
+
   return (
-    <div>
-      <h3 className="font-semibold text-[#1A1B1E] mb-3 text-sm">Theme</h3>
-      <div className="flex gap-3 flex-wrap">
-        {[
-          { id: 'light', label: 'Light', icon: Sun },
-          { id: 'dark', label: 'Dark', icon: Moon },
-        ].map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTheme(id)}
-            className={clsx(
-              'flex items-center gap-2.5 px-5 py-3.5 rounded-xl border-2 text-sm font-medium transition-all',
-              theme === id
-                ? 'border-[#E53935] bg-red-50 text-[#E53935]'
-                : 'border-[#E3E5E8] bg-[#F7F8FA] text-[#5C6068] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]'
-            )}>
-            <Icon size={16} />
-            {label}
-            {theme === id && <CheckCircle2 size={14} className="ml-1" />}
-          </button>
-        ))}
+    <div className="space-y-6">
+      {permDenied && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-xl">
+          <AlertTriangle size={14} className="shrink-0" />
+          Browser blocked notifications. Enable them in your browser settings and try again.
+        </div>
+      )}
+      <div>
+        <SectionLabel>Notification Preferences</SectionLabel>
+        <div className="space-y-2">
+          {NOTIF_ITEMS.map(({ key, label, desc, needsPermission, defaultOn }) => (
+            <div key={key} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
+              <div className="mr-8 min-w-0">
+                <div className="font-semibold text-[#1A1B1E] text-sm">{label}</div>
+                <div className="text-[#96989D] text-xs mt-0.5">{desc}</div>
+              </div>
+              <Toggle
+                checked={prefs[key] ?? defaultOn}
+                onChange={() => toggle(key, needsPermission, defaultOn)}
+              />
+            </div>
+          ))}
+        </div>
       </div>
-      <p className="text-[#96989D] text-xs mt-3">
-        The theme applies immediately and is saved for your next visit.
-      </p>
+      <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-[#96989D] mb-1">Quiet Hours</div>
+        <p className="text-[#5C6068] text-sm">Coming soon — schedule times when Voxa won't send you any notifications.</p>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Privacy & Safety ────────────────────────────────────────────────────── */
+
+const PRIVACY_ITEMS = [
+  { key: 'showOnline',   label: 'Show online status',      desc: 'Let others see when you are active',                    defaultOn: true  },
+  { key: 'allowDMs',     label: 'Allow direct messages',   desc: 'Let members of shared servers send you DMs',             defaultOn: true  },
+  { key: 'readReceipts', label: 'Read receipts',           desc: 'Send read receipts in direct message conversations',     defaultOn: true  },
+  { key: 'activityStatus', label: 'Activity status',       desc: 'Show what game or app you are currently using',          defaultOn: false },
+]
+
+function PrivacySettings() {
+  const [prefs, setPrefs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('voxa_privacy_prefs') || '{}') } catch { return {} }
+  })
+
+  const toggle = (key, defaultOn) => {
+    const updated = { ...prefs, [key]: !(prefs[key] ?? defaultOn) }
+    setPrefs(updated)
+    localStorage.setItem('voxa_privacy_prefs', JSON.stringify(updated))
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionLabel>Privacy Controls</SectionLabel>
+        <div className="space-y-2">
+          {PRIVACY_ITEMS.map(({ key, label, desc, defaultOn }) => (
+            <div key={key} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
+              <div className="mr-8 min-w-0">
+                <div className="font-semibold text-[#1A1B1E] text-sm">{label}</div>
+                <div className="text-[#96989D] text-xs mt-0.5">{desc}</div>
+              </div>
+              <Toggle checked={prefs[key] ?? defaultOn} onChange={() => toggle(key, defaultOn)} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <SectionLabel>Data & Usage</SectionLabel>
+        <div className="space-y-2">
+          {[
+            { label: 'Analytics',        desc: 'Help improve Voxa by sharing anonymous usage data' },
+            { label: 'Crash reports',    desc: 'Automatically send error reports when Voxa crashes' },
+          ].map(({ label, desc }) => (
+            <div key={label} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
+              <div className="mr-8">
+                <div className="font-semibold text-[#1A1B1E] text-sm">{label}</div>
+                <div className="text-[#96989D] text-xs mt-0.5">{desc}</div>
+              </div>
+              <Toggle checked={false} onChange={() => {}} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+          <span className="text-amber-700 text-xs font-semibold uppercase tracking-wider">Note</span>
+        </div>
+        <p className="text-amber-700 text-xs leading-relaxed">
+          These preferences are stored locally on this device. Server-side enforcement is being added in a future update.
+        </p>
+      </div>
     </div>
   )
 }

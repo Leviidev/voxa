@@ -42,9 +42,19 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 
 - Primary bg: `#FFFFFF`, Sidebar: `#F2F3F5`, Sidebar dark: `#E3E5E8`
 - Hover: `#EAEBEE`, Selected: `#E0E2E6`, Input: `#EAEBEE`, Border: `#E3E5E8`
-- Accent red: `#E53935` (brand color), Red dark: `#C62828`
+- Accent red: `#E53935` (brand default, user-customizable via CSS var `--accent`)
 - Text: `#1A1B1E` (header/bold), `#313439` (body), `#5C6068` (muted), `#96989D` (dim)
 - Support email: voxa@voxa.lol (shown in footer and login page)
+
+## Theme System
+
+- `ThemeContext.jsx` stores: `theme` (light/dark), `accentColor`, `fontSize`, `messageDisplay`, `reduceMotion`
+- Persisted to `localStorage` as `voxa_theme_prefs` (single JSON object)
+- Dark mode: `.dark` class toggled on `<html>` — CSS overrides in `index.css` target Tailwind arbitrary-value classes (e.g., `.dark .bg-\[\#F7F8FA\]`)
+- Accent color applied via CSS vars `--accent`, `--accent-dark`, `--accent-subtle` on `<html>` element
+- Use `.v-accent-bg` / `.v-accent-text` / `.v-accent-border` CSS utility classes to inherit accent color
+- Message density stored but ChatArea not yet wired to `data-msg-display` attribute (future work)
+- Notification prefs → `voxa_notif_prefs` in localStorage; Privacy prefs → `voxa_privacy_prefs`
 
 ## Key Design Decisions
 
