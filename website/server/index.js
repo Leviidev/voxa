@@ -150,8 +150,8 @@ app.locals.io = io
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 8,
-  message: { error: 'Too many auth attempts. Try again in 15 minutes.' },
+  windowMs: 60 * 1000, max: 8,
+  message: { error: 'Too many auth attempts. Try again in 1 minute.' },
   standardHeaders: true, legacyHeaders: false,
 })
 const generalLimiter = rateLimit({
