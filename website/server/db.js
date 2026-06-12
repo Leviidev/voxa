@@ -553,4 +553,5 @@ export async function deleteMessage(msgId, userId) {
   if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
   if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   await pool.query('DELETE FROM messages WHERE id=$1', [msgId])
+  return { channelId: msg.channel_id }
 }

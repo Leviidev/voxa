@@ -5,12 +5,14 @@ import AppLayout from './pages/AppLayout.jsx'
 import Me from './pages/Me.jsx'
 import ServerView from './pages/ServerView.jsx'
 import InviteJoin from './pages/InviteJoin.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
+import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
+import { SocketProvider } from './context/SocketContext.jsx'
 
-export default function App() {
+function AppWithSocket() {
+  const { user } = useAuth()
   return (
-    <AuthProvider>
+    <SocketProvider user={user}>
       <ServersProvider>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -25,6 +27,14 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ServersProvider>
+    </SocketProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppWithSocket />
     </AuthProvider>
   )
 }

@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../lib/api.js'
+import { useSocket } from '../context/SocketContext.jsx'
 
 export function useMessages(channelId) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+  const { socket } = useSocket()
+  const channelIdRef = useRef(channelId)
+  channelIdRef.current = channelId
 
-  const localKey = `voxa_msgs_${channelId}`
-
+  // ── Initial load ─────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!channelId) return
-    // Load cache immediately
+    // Show cached immediately
     try {
-      const cached = localStorage.getItem(localKey)
+      const cached = localStorage.getItem(`voxa_msgs_${channelId}`)
       if (cached) setMessages(JSON.parse(cached))
     } catch (_) {}
 
@@ -19,68 +22,110 @@ export function useMessages(channelId) {
     try {
       const msgs = await api.getMessages(channelId)
       setMessages(msgs)
-      localStorage.setItem(localKey, JSON.stringify(msgs))
-    } catch {
-      // Keep cached messages if API fails
-    } finally {
-      setLoading(false)
-    }
+      try { localStorage.setItem(`voxa_msgs_${channelId}`, JSON.stringify(msgs)) } catch (_) {}
+    } catch (_) {}
+    finally { setLoading(false) }
   }, [channelId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    setMessages([])
+    load()
+  }, [load])
 
-  const save = (msgs) => {
-    try { localStorage.setItem(localKey, JSON.stringify(msgs)) } catch (_) {}
-  }
+  // ── Socket: join/leave room + listen for events ───────────────────────────
+  useEffect(() => {
+    if (!socket || !channelId) return
 
+    socket.emit('channel:join', channelId)
+
+    const onNew = (msg) => {
+      if (msg.channelId !== channelIdRef.current) return
+      setMessages(prev => {
+        // Replace optimistic message if it's ours, otherwise append
+        const optimisticIdx = prev.findIndex(
+          m => m.id.startsWith('opt_') && m.authorId === msg.authorId
+        )
+        const next = optimisticIdx >= 0
+          ? prev.map((m, i) => i === optimisticIdx ? msg : m)
+          : [...prev, msg]
+        try { localStorage.setItem(`voxa_msgs_${msg.channelId}`, JSON.stringify(next)) } catch (_) {}
+        return next
+      })
+    }
+
+    const onEdit = (msg) => {
+      if (msg.channelId !== channelIdRef.current) return
+      setMessages(prev => {
+        const next = prev.map(m => m.id === msg.id ? msg : m)
+        try { localStorage.setItem(`voxa_msgs_${msg.channelId}`, JSON.stringify(next)) } catch (_) {}
+        return next
+      })
+    }
+
+    const onDelete = ({ id, channelId: cid }) => {
+      if (cid !== channelIdRef.current) return
+      setMessages(prev => {
+        const next = prev.filter(m => m.id !== id)
+        try { localStorage.setItem(`voxa_msgs_${cid}`, JSON.stringify(next)) } catch (_) {}
+        return next
+      })
+    }
+
+    socket.on('message:new', onNew)
+    socket.on('message:edit', onEdit)
+    socket.on('message:delete', onDelete)
+
+    return () => {
+      socket.emit('channel:leave', channelId)
+      socket.off('message:new', onNew)
+      socket.off('message:edit', onEdit)
+      socket.off('message:delete', onDelete)
+    }
+  }, [socket, channelId])
+
+  // ── Actions ───────────────────────────────────────────────────────────────
   const addMessage = async (content, user) => {
     // Optimistic
     const optimistic = {
       id: 'opt_' + Date.now(),
       author: user.username,
       authorId: user.id,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      avatarColor: user.avatarColor,
       discriminator: user.discriminator,
+      channelId,
       content,
       timestamp: new Date().toISOString(),
       edited: false,
     }
-    const next = [...messages, optimistic]
-    setMessages(next)
+    setMessages(prev => [...prev, optimistic])
 
     try {
       const real = await api.sendMessage(channelId, content)
+      // Server will broadcast via socket, but we also update optimistic locally
       setMessages(prev => {
-        const updated = prev.map(m => m.id === optimistic.id ? real : m)
-        save(updated)
-        return updated
+        const next = prev.map(m => m.id === optimistic.id ? real : m)
+        try { localStorage.setItem(`voxa_msgs_${channelId}`, JSON.stringify(next)) } catch (_) {}
+        return next
       })
-    } catch {
-      save(next)
+    } catch (err) {
+      // Remove optimistic on failure
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id))
+      throw err
     }
   }
 
   const deleteMessage = async (id) => {
-    setMessages(prev => {
-      const next = prev.filter(m => m.id !== id)
-      save(next)
-      return next
-    })
+    setMessages(prev => prev.filter(m => m.id !== id))
     try { await api.deleteMessage(id) } catch (_) {}
   }
 
   const editMessage = async (id, content) => {
-    setMessages(prev => {
-      const next = prev.map(m => m.id === id ? { ...m, content, edited: true } : m)
-      save(next)
-      return next
-    })
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content, edited: true } : m))
     try {
       const updated = await api.editMessage(id, content)
-      setMessages(prev => {
-        const next = prev.map(m => m.id === id ? updated : m)
-        save(next)
-        return next
-      })
+      setMessages(prev => prev.map(m => m.id === id ? updated : m))
     } catch (_) {}
   }
 

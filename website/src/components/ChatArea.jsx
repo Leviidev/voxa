@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, Wifi, WifiOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
+import { useTyping } from '../hooks/useTyping.js'
 import clsx from 'clsx'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
@@ -9,23 +11,39 @@ const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
 
 export default function ChatArea({ channel, server }) {
   const { user } = useAuth()
+  const { connected } = useSocket()
   const { messages, loading, addMessage, deleteMessage, editMessage } = useMessages(channel?.id)
+  const { typers, onTyping, stopTyping } = useTyping(channel?.id, user)
   const [input, setInput] = useState('')
   const [showMembers, setShowMembers] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editVal, setEditVal] = useState('')
+  const [sendError, setSendError] = useState('')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const prevChannelId = useRef(channel?.id)
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: prevChannelId.current !== channel?.id ? 'instant' : 'smooth' })
+    prevChannelId.current = channel?.id
+  }, [messages, channel?.id])
+
   useEffect(() => { inputRef.current?.focus() }, [channel?.id])
 
   const sendMessage = async (e) => {
     e.preventDefault()
-    if (!input.trim() || !user) return
     const text = input.trim()
+    if (!text || !user) return
     setInput('')
-    await addMessage(text, user)
+    setSendError('')
+    stopTyping()
+    try {
+      await addMessage(text, user)
+    } catch (err) {
+      setSendError(err.message)
+      setInput(text)
+    }
   }
 
   const submitEdit = async (id) => {
@@ -52,6 +70,14 @@ export default function ChatArea({ channel, server }) {
 
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
+      {/* Connection banner */}
+      {!connected && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 shrink-0">
+          <WifiOff size={13} className="text-amber-600 shrink-0" />
+          <span className="text-amber-700 text-xs font-medium">Reconnecting… messages may be delayed</span>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="h-12 px-4 flex items-center gap-2.5 border-b border-[#E3E5E8] shrink-0 bg-white">
         <Hash size={18} className="text-[#96989D] shrink-0" />
@@ -66,6 +92,13 @@ export default function ChatArea({ channel, server }) {
         )}
         <div className="flex-1" />
         <div className="flex items-center gap-0.5">
+          {/* Live indicator */}
+          {connected && (
+            <div className="flex items-center gap-1 mr-2" title="Live — messages update in real time">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#23a55a] animate-pulse" />
+              <span className="text-[10px] text-[#96989D] hidden sm:block">Live</span>
+            </div>
+          )}
           <TopBtn icon={Bell} label="Notifications" />
           <TopBtn icon={Pin} label="Pinned" />
           <TopBtn icon={Users} label="Members" onClick={() => setShowMembers(v => !v)} active={showMembers} />
@@ -78,61 +111,103 @@ export default function ChatArea({ channel, server }) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto scrollable px-4 py-4 flex flex-col gap-0.5">
-          {loading && messages.length === 0 && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto scrollable px-4 py-4 flex flex-col gap-0.5">
+            {loading && messages.length === 0 && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            <ChannelWelcome channel={channel} />
+            {messages.map((msg, i) => {
+              const prev = messages[i - 1]
+              const grouped = prev?.author === msg.author &&
+                (new Date(msg.timestamp) - new Date(prev.timestamp)) < 1000 * 60 * 5
+              return (
+                <Message
+                  key={msg.id}
+                  msg={msg}
+                  grouped={grouped}
+                  isOwn={msg.authorId === user?.id || msg.author === user?.username}
+                  editing={editingId === msg.id}
+                  editVal={editVal}
+                  onEditVal={setEditVal}
+                  onStartEdit={() => { setEditingId(msg.id); setEditVal(msg.content) }}
+                  onSubmitEdit={() => submitEdit(msg.id)}
+                  onCancelEdit={() => setEditingId(null)}
+                  onDelete={() => deleteMessage(msg.id)}
+                />
+              )
+            })}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Typing indicator */}
+          <TypingIndicator typers={typers} />
+
+          {/* Send error */}
+          {sendError && (
+            <div className="px-4 pb-1">
+              <p className="text-red-500 text-xs">{sendError}</p>
             </div>
           )}
-          <ChannelWelcome channel={channel} />
-          {messages.map((msg, i) => {
-            const prev = messages[i - 1]
-            const grouped = prev?.author === msg.author &&
-              (new Date(msg.timestamp) - new Date(prev.timestamp)) < 1000 * 60 * 5
-            return (
-              <Message
-                key={msg.id}
-                msg={msg}
-                grouped={grouped}
-                isOwn={msg.authorId === user?.id || msg.author === user?.username}
-                editing={editingId === msg.id}
-                editVal={editVal}
-                onEditVal={setEditVal}
-                onStartEdit={() => { setEditingId(msg.id); setEditVal(msg.content) }}
-                onSubmitEdit={() => submitEdit(msg.id)}
-                onCancelEdit={() => setEditingId(null)}
-                onDelete={() => deleteMessage(msg.id)}
+
+          {/* Input */}
+          <div className="px-4 pb-4 shrink-0">
+            <form onSubmit={sendMessage}
+              className="bg-[#F2F3F5] border border-[#E3E5E8] rounded-xl flex items-center gap-2 px-4 focus-within:ring-2 focus-within:ring-[#E53935]/20 focus-within:border-[#E53935]/40 transition-all">
+              <button type="button" className="text-[#96989D] hover:text-[#5C6068] py-3 shrink-0 transition-colors">
+                <Plus size={18} />
+              </button>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={e => { setInput(e.target.value); onTyping() }}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { setInput(''); stopTyping() }
+                }}
+                placeholder={`Message #${channel?.name ?? 'general'}`}
+                className="flex-1 bg-transparent text-[#1A1B1E] text-sm py-3 outline-none placeholder:text-[#96989D]"
+                maxLength={2000}
               />
-            )
-          })}
-          <div ref={bottomRef} />
+              <button type="button" className="text-[#96989D] hover:text-[#5C6068] transition-colors p-1">
+                <Smile size={17} />
+              </button>
+            </form>
+            <p className="text-[#96989D] text-xs mt-1 px-1">
+              Press <kbd className="bg-[#F2F3F5] border border-[#E3E5E8] px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> to send
+            </p>
+          </div>
         </div>
 
         {showMembers && server && <MemberList members={server.members} />}
       </div>
+    </div>
+  )
+}
 
-      {/* Input */}
-      <div className="px-4 pb-5 shrink-0">
-        <form onSubmit={sendMessage} className="bg-[#F2F3F5] border border-[#E3E5E8] rounded-xl flex items-center gap-2 px-4 focus-within:ring-2 focus-within:ring-[#E53935]/20 focus-within:border-[#E53935]/40 transition-all">
-          <button type="button" className="text-[#96989D] hover:text-[#5C6068] py-3 shrink-0 transition-colors">
-            <Plus size={18} />
-          </button>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') setInput('') }}
-            placeholder={`Message #${channel?.name ?? 'general'}`}
-            className="flex-1 bg-transparent text-[#1A1B1E] text-sm py-3 outline-none placeholder:text-[#96989D]"
+function TypingIndicator({ typers }) {
+  if (!typers.length) return <div className="h-5 shrink-0 px-5" />
+
+  const names = typers.slice(0, 3).map(t => t.username)
+  let label
+  if (names.length === 1) label = `${names[0]} is typing`
+  else if (names.length === 2) label = `${names[0]} and ${names[1]} are typing`
+  else label = `${names[0]}, ${names[1]} and others are typing`
+
+  return (
+    <div className="h-5 shrink-0 px-5 flex items-center gap-1.5">
+      <span className="flex gap-0.5 items-end">
+        {[0, 1, 2].map(i => (
+          <span key={i}
+            className="w-1 h-1 rounded-full bg-[#96989D] animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
           />
-          <button type="button" className="text-[#96989D] hover:text-[#5C6068] transition-colors p-1">
-            <Smile size={17} />
-          </button>
-        </form>
-        <p className="text-[#96989D] text-xs mt-1 px-1">
-          Press <kbd className="bg-[#F2F3F5] border border-[#E3E5E8] px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> to send
-        </p>
-      </div>
+        ))}
+      </span>
+      <span className="text-[11px] text-[#96989D]">
+        <strong className="font-semibold text-[#5C6068]">{label}</strong>…
+      </span>
     </div>
   )
 }
@@ -162,7 +237,8 @@ function ChannelWelcome({ channel }) {
 }
 
 function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit, onSubmitEdit, onCancelEdit, onDelete }) {
-  const color = avatarColor(msg.author)
+  const color = msg.avatarColor || avatarColor(msg.author)
+  const isOptimistic = msg.id?.startsWith('opt_')
   const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   if (editing) {
@@ -174,7 +250,7 @@ function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="font-semibold text-[#1A1B1E] text-sm">{msg.author}</span>
+            <span className="font-semibold text-[#1A1B1E] text-sm">{msg.displayName ?? msg.author}</span>
             <span className="text-[#96989D] text-xs">{time}</span>
           </div>
           <input autoFocus value={editVal} onChange={e => onEditVal(e.target.value)}
@@ -195,33 +271,42 @@ function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit
   }
 
   if (grouped) return (
-    <div className="flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5">
+    <div className={clsx(
+      'flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5',
+      isOptimistic && 'opacity-60'
+    )}>
       <span className="text-[#96989D] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
       <p className="text-sm text-[#313439] leading-relaxed flex-1">
         {msg.content}
         {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
       </p>
-      {isOwn && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
+      {isOwn && !isOptimistic && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
     </div>
   )
 
   return (
-    <div className="flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2">
-      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5"
-        style={{ background: color }}>
-        {msg.author?.[0]?.toUpperCase()}
+    <div className={clsx(
+      'flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2',
+      isOptimistic && 'opacity-60'
+    )}>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5 overflow-hidden"
+        style={{ background: msg.avatarUrl ? undefined : color }}>
+        {msg.avatarUrl
+          ? <img src={msg.avatarUrl} alt="" className="w-full h-full object-cover" />
+          : msg.author?.[0]?.toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
-          <span className="font-semibold text-[#1A1B1E] text-sm">{msg.author}</span>
+          <span className="font-semibold text-[#1A1B1E] text-sm">{msg.displayName ?? msg.author}</span>
           <span className="text-[#96989D] text-xs">{time}</span>
+          {isOptimistic && <span className="text-[#96989D] text-[10px]">sending…</span>}
         </div>
         <p className="text-sm text-[#313439] leading-relaxed">
           {msg.content}
           {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
         </p>
       </div>
-      {isOwn && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
+      {isOwn && !isOptimistic && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
     </div>
   )
 }
@@ -243,7 +328,6 @@ function MessageActions({ onEdit, onDelete }) {
 
 function MemberList({ members }) {
   const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#96989D' }
-  const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
 
   if (!members?.length) return (
     <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] py-4 shrink-0">
@@ -268,16 +352,22 @@ function MemberList({ members }) {
             <div key={m.id}
               className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-[#EAEBEE] cursor-pointer transition-colors">
               <div className="relative shrink-0">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs"
-                  style={{ background: COLORS[m.username?.charCodeAt(0) % COLORS.length] }}>
-                  {m.username?.[0]?.toUpperCase()}
+                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden"
+                  style={{ background: m.avatarUrl ? undefined : (m.avatarColor || avatarColor(m.username)) }}>
+                  {m.avatarUrl
+                    ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    : m.username?.[0]?.toUpperCase()}
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#F7F8FA]"
                   style={{ background: statusColor[m.status] ?? '#96989D' }} />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-[#5C6068] truncate">{m.username}</div>
-                {m.role !== 'Member' && <div className="text-[10px] text-[#E53935] font-medium">{m.role}</div>}
+                <div className="text-sm font-medium text-[#5C6068] truncate">{m.displayName ?? m.username}</div>
+                {m.roles?.length > 0 && m.roles[0].name !== '@everyone' && (
+                  <div className="text-[10px] font-medium truncate" style={{ color: m.roles[0].color || '#E53935' }}>
+                    {m.roles[0].name}
+                  </div>
+                )}
               </div>
             </div>
           ))}

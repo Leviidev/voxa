@@ -1,6 +1,9 @@
 import express from 'express'
 import cors from 'cors'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
 import rateLimit from 'express-rate-limit'
+import jwt from 'jsonwebtoken'
 import authRoutes from './routes/auth.js'
 import serverRoutes from './routes/servers.js'
 import channelRoutes from './routes/channels.js'
@@ -9,52 +12,140 @@ import userRoutes from './routes/users.js'
 import inviteRoutes from './routes/invites.js'
 
 const app = express()
+const httpServer = createServer(app)
 const PORT = process.env.API_PORT || 3001
+const JWT_SECRET = process.env.JWT_SECRET || 'voxa_dev_secret_change_in_prod'
 
-// ─── Security: CORS ───────────────────────────────────────────────────────────
-app.use(cors({
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+const corsOptions = {
   origin: (origin, cb) => {
     const allowed = (process.env.CORS_ORIGIN || '').split(',').filter(Boolean)
     const replitDomain = process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ''
     const defaults = ['http://localhost:5000', 'http://localhost:5173', 'https://voxa.lol']
     if (replitDomain) defaults.push(replitDomain)
-    // Also allow any *.replit.dev or *.repl.co domains
     const isReplitDomain = origin && (origin.endsWith('.replit.dev') || origin.endsWith('.repl.co'))
     const ok = !origin || isReplitDomain || [...defaults, ...allowed].some(o => origin.startsWith(o))
     cb(ok ? null : new Error('CORS blocked'), ok)
   },
   credentials: true,
-}))
-
+}
+app.use(cors(corsOptions))
 app.use(express.json({ limit: '2mb' }))
 
-// ─── Security: Rate Limiting ──────────────────────────────────────────────────
+// ─── Socket.IO ────────────────────────────────────────────────────────────────
+const io = new Server(httpServer, {
+  cors: {
+    origin: corsOptions.origin,
+    credentials: true,
+  },
+  transports: ['websocket', 'polling'],
+})
 
-// Auth: very strict — 8 attempts per 15 min per IP
+// Auth middleware — verify JWT on every socket connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token
+  if (!token) return next(new Error('Unauthorized'))
+  try {
+    socket.user = jwt.verify(token, JWT_SECRET)
+    next()
+  } catch {
+    next(new Error('Unauthorized'))
+  }
+})
+
+// Track typing: channelId → Map<userId, {username, timer}>
+const typingState = new Map()
+
+io.on('connection', (socket) => {
+  const { id: userId } = socket.user
+
+  // ── Join / leave channel rooms ─────────────────────────────────────────────
+  socket.on('channel:join', (channelId) => {
+    socket.join(`ch:${channelId}`)
+  })
+
+  socket.on('channel:leave', (channelId) => {
+    socket.leave(`ch:${channelId}`)
+    clearTyping(channelId, userId, socket)
+  })
+
+  // ── Typing indicators ──────────────────────────────────────────────────────
+  socket.on('typing:start', ({ channelId, username }) => {
+    if (!channelId) return
+    if (!typingState.has(channelId)) typingState.set(channelId, new Map())
+    const channel = typingState.get(channelId)
+
+    // Clear old auto-stop timer
+    if (channel.has(userId)) clearTimeout(channel.get(userId).timer)
+
+    const timer = setTimeout(() => {
+      clearTyping(channelId, userId, socket)
+    }, 4000)
+
+    channel.set(userId, { username, timer })
+
+    socket.to(`ch:${channelId}`).emit('typing:update', {
+      channelId,
+      userId,
+      username,
+      typing: true,
+    })
+  })
+
+  socket.on('typing:stop', ({ channelId }) => {
+    clearTyping(channelId, userId, socket)
+  })
+
+  // ── Presence ───────────────────────────────────────────────────────────────
+  socket.on('presence:update', ({ serverId, status }) => {
+    socket.to(`srv:${serverId}`).emit('presence:update', { userId, status })
+  })
+
+  socket.on('server:join', (serverId) => {
+    socket.join(`srv:${serverId}`)
+  })
+
+  socket.on('disconnect', () => {
+    // Clean up all typing indicators for this user
+    for (const [channelId] of typingState) {
+      clearTyping(channelId, userId, socket)
+    }
+  })
+})
+
+function clearTyping(channelId, userId, socket) {
+  const channel = typingState.get(channelId)
+  if (!channel) return
+  const entry = channel.get(userId)
+  if (entry) {
+    clearTimeout(entry.timer)
+    channel.delete(userId)
+    socket.to(`ch:${channelId}`).emit('typing:update', {
+      channelId,
+      userId,
+      typing: false,
+    })
+  }
+}
+
+// Expose io to route handlers
+app.locals.io = io
+
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 8,
+  windowMs: 15 * 60 * 1000, max: 8,
   message: { error: 'Too many auth attempts. Try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  standardHeaders: true, legacyHeaders: false,
 })
-
-// General API: 200 req / 5 min per IP
 const generalLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 200,
+  windowMs: 5 * 60 * 1000, max: 200,
   message: { error: 'Too many requests. Slow down.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  standardHeaders: true, legacyHeaders: false,
 })
-
-// Messages: 30 per minute per IP (anti-spam)
 const messageLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+  windowMs: 60 * 1000, max: 30,
   message: { error: 'Sending messages too fast. Slow down.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  standardHeaders: true, legacyHeaders: false,
 })
 
 app.use('/api/auth', authLimiter)
@@ -84,4 +175,4 @@ app.use((err, req, res, _next) => {
   res.status(err.status ?? 500).json({ error: err.message ?? 'Internal server error' })
 })
 
-app.listen(PORT, () => console.log(`Voxa API running on http://localhost:${PORT}`))
+httpServer.listen(PORT, () => console.log(`Voxa API + WebSocket running on http://localhost:${PORT}`))
