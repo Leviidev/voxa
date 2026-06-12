@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
 import { useTyping } from '../hooks/useTyping.js'
+import ThreadPanel from './ThreadPanel.jsx'
 import clsx from 'clsx'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
-
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '😮', '😢', '👀']
 
 export default function ChatArea({ channel, server }) {
@@ -21,14 +21,28 @@ export default function ChatArea({ channel, server }) {
   const [editingId, setEditingId] = useState(null)
   const [editVal, setEditVal] = useState('')
   const [sendError, setSendError] = useState('')
+  const [threadMsgId, setThreadMsgId] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const prevChannelId = useRef(channel?.id)
 
+  // Close thread when switching channels
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: prevChannelId.current !== channel?.id ? 'instant' : 'smooth' })
+    if (channel?.id !== prevChannelId.current) {
+      setThreadMsgId(null)
+    }
     prevChannelId.current = channel?.id
-  }, [messages, channel?.id])
+  }, [channel?.id])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'instant' })
+  }, [channel?.id])
+
+  useEffect(() => {
+    if (!threadMsgId) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages])
 
   useEffect(() => { inputRef.current?.focus() }, [channel?.id])
 
@@ -50,6 +64,16 @@ export default function ChatArea({ channel, server }) {
   const submitEdit = async (id) => {
     if (editVal.trim()) await editMessage(id, editVal.trim())
     setEditingId(null)
+  }
+
+  const openThread = (msgId) => {
+    setThreadMsgId(prev => prev === msgId ? null : msgId)
+    setShowMembers(false)
+  }
+
+  const toggleMembers = () => {
+    setShowMembers(v => !v)
+    setThreadMsgId(null)
   }
 
   if (channel?.type === 'voice') {
@@ -101,7 +125,7 @@ export default function ChatArea({ channel, server }) {
           )}
           <TopBtn icon={Bell} label="Notifications" />
           <TopBtn icon={Pin} label="Pinned" />
-          <TopBtn icon={Users} label="Members" onClick={() => setShowMembers(v => !v)} active={showMembers} />
+          <TopBtn icon={Users} label="Members" onClick={toggleMembers} active={showMembers} />
           <div className="mx-1 bg-[#F2F3F5] border border-[#E3E5E8] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
             <Search size={12} className="text-[#96989D]" />
             <span className="text-xs text-[#96989D] w-14 hidden sm:block">Search</span>
@@ -138,23 +162,22 @@ export default function ChatArea({ channel, server }) {
                   onCancelEdit={() => setEditingId(null)}
                   onDelete={() => deleteMessage(msg.id)}
                   onReact={(emoji) => toggleReaction(msg.id, emoji)}
+                  onOpenThread={() => openThread(msg.id)}
+                  threadOpen={threadMsgId === msg.id}
                 />
               )
             })}
             <div ref={bottomRef} />
           </div>
 
-          {/* Typing indicator */}
           <TypingIndicator typers={typers} />
 
-          {/* Send error */}
           {sendError && (
             <div className="px-5 pb-1">
               <p className="text-red-500 text-xs">{sendError}</p>
             </div>
           )}
 
-          {/* Input */}
           <div className="px-4 pb-4 shrink-0">
             <form onSubmit={sendMessage}
               className="bg-[#F2F3F5] border border-[#E3E5E8] rounded-xl flex items-center gap-2 px-4 focus-within:ring-2 focus-within:ring-[#E53935]/20 focus-within:border-[#E53935]/40 transition-all">
@@ -180,7 +203,16 @@ export default function ChatArea({ channel, server }) {
           </div>
         </div>
 
-        {showMembers && server && <MemberList members={server.members} />}
+        {/* Right panels — thread takes priority over members */}
+        {threadMsgId && (
+          <ThreadPanel
+            key={threadMsgId}
+            parentId={threadMsgId}
+            channelName={channel?.name}
+            onClose={() => setThreadMsgId(null)}
+          />
+        )}
+        {showMembers && !threadMsgId && server && <MemberList members={server.members} />}
       </div>
     </div>
   )
@@ -241,23 +273,19 @@ function ChannelWelcome({ channel }) {
 // ── Reaction pills ────────────────────────────────────────────────────────────
 function ReactionPills({ reactions, currentUserId, onReact }) {
   if (!reactions || !Object.keys(reactions).length) return null
-
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {Object.entries(reactions).map(([emoji, { count, userIds }]) => {
         const reacted = userIds.includes(currentUserId)
         return (
-          <button
-            key={emoji}
-            onClick={() => onReact(emoji)}
+          <button key={emoji} onClick={() => onReact(emoji)}
             title={`${count} reaction${count !== 1 ? 's' : ''}`}
             className={clsx(
               'flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all',
               reacted
                 ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]'
                 : 'bg-[#F2F3F5] border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] hover:border-[#D5D7DC]'
-            )}
-          >
+            )}>
             <span>{emoji}</span>
             <span>{count}</span>
           </button>
@@ -267,10 +295,9 @@ function ReactionPills({ reactions, currentUserId, onReact }) {
   )
 }
 
-// ── Quick emoji picker (shown on hover) ───────────────────────────────────────
+// ── Quick emoji picker ────────────────────────────────────────────────────────
 function QuickReactPicker({ onReact, onClose }) {
   const ref = useRef(null)
-
   useEffect(() => {
     function handle(e) {
       if (ref.current && !ref.current.contains(e.target)) onClose()
@@ -284,8 +311,7 @@ function QuickReactPicker({ onReact, onClose }) {
       className="absolute bottom-full right-0 mb-1 bg-white border border-[#E3E5E8] rounded-xl shadow-lg p-1.5 flex gap-0.5 z-50">
       {QUICK_EMOJIS.map(e => (
         <button key={e} onClick={() => { onReact(e); onClose() }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-lg hover:bg-[#F2F3F5] transition-colors"
-          title={e}>
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-lg hover:bg-[#F2F3F5] transition-colors">
           {e}
         </button>
       ))}
@@ -293,9 +319,28 @@ function QuickReactPicker({ onReact, onClose }) {
   )
 }
 
+// ── Thread summary shown below a message ─────────────────────────────────────
+function ThreadSummary({ replyCount, open, onClick }) {
+  if (!replyCount) return null
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'mt-1 flex items-center gap-1.5 text-xs font-medium rounded-lg px-2 py-1 -mx-2 transition-colors',
+        open
+          ? 'bg-[#E53935]/10 text-[#E53935]'
+          : 'text-[#5C6068] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]'
+      )}
+    >
+      <MessageSquare size={11} />
+      <span>{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
+    </button>
+  )
+}
+
 // ── Message row ───────────────────────────────────────────────────────────────
 function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditVal,
-  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact }) {
+  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact, onOpenThread, threadOpen }) {
   const [showPicker, setShowPicker] = useState(false)
   const color = msg.avatarColor || avatarColor(msg.author)
   const isOptimistic = msg.id?.startsWith('opt_')
@@ -303,6 +348,9 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
 
   const reactions = (
     <ReactionPills reactions={msg.reactions} currentUserId={currentUserId} onReact={onReact} />
+  )
+  const threadSummary = (
+    <ThreadSummary replyCount={msg.replyCount} open={threadOpen} onClick={onOpenThread} />
   )
 
   if (editing) {
@@ -335,7 +383,11 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
   }
 
   if (grouped) return (
-    <div className={clsx('flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5', isOptimistic && 'opacity-60')}>
+    <div className={clsx(
+      'flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5',
+      isOptimistic && 'opacity-60',
+      threadOpen && 'bg-[#FFF5F5]',
+    )}>
       <span className="text-[#96989D] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-[#313439] leading-relaxed">
@@ -343,10 +395,12 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
           {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
         </p>
         {reactions}
+        {threadSummary}
       </div>
       {!isOptimistic && (
         <div className="relative">
-          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete} onReactOpen={() => setShowPicker(v => !v)} />
+          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete}
+            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -354,7 +408,11 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
   )
 
   return (
-    <div className={clsx('flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2', isOptimistic && 'opacity-60')}>
+    <div className={clsx(
+      'flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2',
+      isOptimistic && 'opacity-60',
+      threadOpen && 'bg-[#FFF5F5]',
+    )}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5 overflow-hidden"
         style={{ background: msg.avatarUrl ? undefined : color }}>
         {msg.avatarUrl
@@ -372,10 +430,12 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
           {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
         </p>
         {reactions}
+        {threadSummary}
       </div>
       {!isOptimistic && (
         <div className="relative">
-          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete} onReactOpen={() => setShowPicker(v => !v)} />
+          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete}
+            onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -384,12 +444,21 @@ function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditV
 }
 
 // ── Action buttons row ────────────────────────────────────────────────────────
-function MessageActions({ isOwn, onEdit, onDelete, onReactOpen }) {
+function MessageActions({ isOwn, onEdit, onDelete, onReactOpen, onThread, threadOpen }) {
   return (
     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
       <button onClick={onReactOpen} title="Add Reaction"
         className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors text-base">
         😊
+      </button>
+      <button onClick={onThread} title="Open Thread"
+        className={clsx(
+          'w-7 h-7 rounded-lg border flex items-center justify-center shadow-sm transition-colors',
+          threadOpen
+            ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]'
+            : 'bg-white border-[#E3E5E8] text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC]'
+        )}>
+        <MessageSquare size={12} />
       </button>
       {isOwn && (
         <>
@@ -410,19 +479,16 @@ function MessageActions({ isOwn, onEdit, onDelete, onReactOpen }) {
 // ── Member list panel ─────────────────────────────────────────────────────────
 function MemberList({ members }) {
   const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#96989D' }
-
   if (!members?.length) return (
     <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] py-4 shrink-0">
       <div className="px-4 text-[#96989D] text-[10px] font-bold uppercase tracking-wider mb-3">Members — 0</div>
     </div>
   )
-
   const grouped = members.reduce((acc, m) => {
     const g = m.status === 'offline' ? 'Offline' : 'Online'
     ;(acc[g] = acc[g] ?? []).push(m)
     return acc
   }, {})
-
   return (
     <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] overflow-y-auto scrollable py-3 shrink-0">
       {Object.entries(grouped).map(([group, mems]) => (

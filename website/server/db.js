@@ -505,57 +505,83 @@ function shapeReactions(raw) {
   return out
 }
 
-export async function getMessages(channelId, limit = 50) {
-  const { rows } = await pool.query(
-    `SELECT m.*,
-       COALESCE(
-         (
-           SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
-           FROM (
-             SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
-             FROM message_reactions
-             WHERE message_id = m.id
-             GROUP BY emoji
-           ) sub
-         ),
-         '{}'::jsonb
-       ) AS reactions
-     FROM messages m
-     WHERE m.channel_id = $1
-     ORDER BY m.timestamp ASC
-     LIMIT $2`,
-    [channelId, limit]
-  )
-  return rows.map(m => ({
+function shapeMessage(m) {
+  return {
     id: m.id, channelId: m.channel_id, authorId: m.author_id,
     author: m.author, displayName: m.display_name,
     avatarUrl: m.avatar_url, avatarColor: m.avatar_color,
     discriminator: m.discriminator, content: m.content,
     timestamp: m.timestamp, edited: m.edited, editedAt: m.edited_at,
+    parentId: m.parent_id ?? null,
+    replyCount: Number(m.reply_count ?? 0),
     reactions: shapeReactions(m.reactions),
-  }))
+  }
 }
 
-export async function createMessage({ channelId, userId, content }) {
+export async function getMessages(channelId, limit = 50) {
+  const { rows } = await pool.query(
+    `SELECT m.*,
+       (SELECT COUNT(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count,
+       COALESCE(
+         (
+           SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+           FROM (
+             SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+             FROM message_reactions WHERE message_id = m.id GROUP BY emoji
+           ) sub
+         ), '{}'::jsonb
+       ) AS reactions
+     FROM messages m
+     WHERE m.channel_id = $1 AND m.parent_id IS NULL
+     ORDER BY m.timestamp ASC
+     LIMIT $2`,
+    [channelId, limit]
+  )
+  return rows.map(shapeMessage)
+}
+
+export async function createMessage({ channelId, userId, content, parentId = null }) {
   const { rows: [channel] } = await pool.query('SELECT * FROM channels WHERE id=$1', [channelId])
   if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
   const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id=$1', [userId])
 
   const id = generateId('msg_')
   const { rows: [msg] } = await pool.query(
-    `INSERT INTO messages (id, channel_id, author_id, author, display_name, avatar_url, avatar_color, discriminator, content, timestamp, edited)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),false) RETURNING *`,
+    `INSERT INTO messages (id, channel_id, author_id, author, display_name, avatar_url, avatar_color, discriminator, content, timestamp, edited, parent_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),false,$10) RETURNING *`,
     [id, channelId, userId, user?.username ?? 'Unknown', user?.display_name ?? null,
      user?.avatar_url ?? null, user?.avatar_color ?? null,
-     user?.discriminator ?? '0000', sanitize(content, 2000)]
+     user?.discriminator ?? '0000', sanitize(content, 2000), parentId ?? null]
   )
-  return {
-    id: msg.id, channelId: msg.channel_id, authorId: msg.author_id,
-    author: msg.author, displayName: msg.display_name,
-    avatarUrl: msg.avatar_url, avatarColor: msg.avatar_color,
-    discriminator: msg.discriminator, content: msg.content,
-    timestamp: msg.timestamp, edited: msg.edited, editedAt: msg.edited_at,
-  }
+  return shapeMessage({ ...msg, reply_count: 0, reactions: {} })
+}
+
+export async function getThread(parentId) {
+  const { rows: [parent] } = await pool.query(
+    `SELECT m.*,
+       (SELECT COUNT(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count,
+       COALESCE(
+         (SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+          FROM (SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+                FROM message_reactions WHERE message_id = m.id GROUP BY emoji) sub
+         ), '{}'::jsonb
+       ) AS reactions
+     FROM messages m WHERE m.id = $1`, [parentId]
+  )
+  if (!parent) throw Object.assign(new Error('Message not found'), { status: 404 })
+
+  const { rows: replies } = await pool.query(
+    `SELECT m.*,
+       0 AS reply_count,
+       COALESCE(
+         (SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+          FROM (SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+                FROM message_reactions WHERE message_id = m.id GROUP BY emoji) sub
+         ), '{}'::jsonb
+       ) AS reactions
+     FROM messages m WHERE m.parent_id = $1 ORDER BY m.timestamp ASC`, [parentId]
+  )
+  return { parent: shapeMessage(parent), replies: replies.map(shapeMessage) }
 }
 
 export async function editMessage(msgId, userId, content) {

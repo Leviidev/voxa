@@ -78,10 +78,16 @@ export function useMessages(channelId) {
       })
     }
 
+    const onThreadNew = ({ parentId, channelId: cid, replyCount }) => {
+      if (cid !== channelIdRef.current) return
+      setMessages(prev => prev.map(m => m.id === parentId ? { ...m, replyCount } : m))
+    }
+
     socket.on('message:new', onNew)
     socket.on('message:edit', onEdit)
     socket.on('message:delete', onDelete)
     socket.on('reaction:update', onReaction)
+    socket.on('thread:new', onThreadNew)
 
     return () => {
       socket.emit('channel:leave', channelId)
@@ -89,6 +95,7 @@ export function useMessages(channelId) {
       socket.off('message:edit', onEdit)
       socket.off('message:delete', onDelete)
       socket.off('reaction:update', onReaction)
+      socket.off('thread:new', onThreadNew)
     }
   }, [socket, channelId])
 

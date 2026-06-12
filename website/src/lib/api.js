@@ -95,4 +95,9 @@ export const api = {
     request(`/messages/${id}`, { method: 'DELETE' }),
   toggleReaction: (msgId, emoji) =>
     request(`/messages/${msgId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+
+  // Threads
+  getThread: (msgId) => request(`/messages/${msgId}/thread`),
+  postReply: (msgId, content) =>
+    request(`/messages/${msgId}/replies`, { method: 'POST', body: JSON.stringify({ content }) }),
 }
