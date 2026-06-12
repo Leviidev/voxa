@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../lib/api.js'
 import { useSocket } from '../context/SocketContext.jsx'
+import { useUnread } from '../context/UnreadContext.jsx'
 
 export function useMessages(channelId) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const { socket } = useSocket()
+  const { markChannelRead } = useUnread()
   const channelIdRef = useRef(channelId)
   channelIdRef.current = channelId
 
@@ -21,10 +23,11 @@ export function useMessages(channelId) {
     try {
       const msgs = await api.getMessages(channelId)
       setMessages(msgs)
+      markChannelRead(channelId)
       try { localStorage.setItem(`voxa_msgs_${channelId}`, JSON.stringify(msgs)) } catch (_) {}
     } catch (_) {}
     finally { setLoading(false) }
-  }, [channelId])
+  }, [channelId, markChannelRead])
 
   useEffect(() => {
     setMessages([])

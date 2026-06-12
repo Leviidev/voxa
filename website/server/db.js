@@ -778,3 +778,57 @@ export async function deleteDmMessage(msgId, userId) {
   await pool.query('DELETE FROM dm_messages WHERE id = $1', [msgId])
   return { dmChannelId: msg.dm_channel_id }
 }
+
+// ─── Unread Tracking ──────────────────────────────────────────────────────────
+
+export async function markChannelRead(userId, channelId) {
+  await pool.query(
+    `INSERT INTO channel_reads (user_id, channel_id, last_read_at)
+     VALUES ($1,$2,NOW())
+     ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_at = NOW()`,
+    [userId, channelId]
+  )
+}
+
+export async function markDmRead(userId, dmChannelId) {
+  await pool.query(
+    `INSERT INTO dm_reads (user_id, dm_channel_id, last_read_at)
+     VALUES ($1,$2,NOW())
+     ON CONFLICT (user_id, dm_channel_id) DO UPDATE SET last_read_at = NOW()`,
+    [userId, dmChannelId]
+  )
+}
+
+export async function getUnreadCounts(userId) {
+  const { rows: chRows } = await pool.query(
+    `SELECT m.channel_id, COUNT(*) AS cnt
+     FROM messages m
+     LEFT JOIN channel_reads cr ON cr.channel_id = m.channel_id AND cr.user_id = $1
+     WHERE m.parent_id IS NULL
+       AND m.author_id != $1
+       AND (cr.last_read_at IS NULL OR m.timestamp > cr.last_read_at)
+       AND m.channel_id IN (
+         SELECT c.id FROM channels c
+         JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $1
+       )
+     GROUP BY m.channel_id`,
+    [userId]
+  )
+  const { rows: dmRows } = await pool.query(
+    `SELECT dm.dm_channel_id, COUNT(*) AS cnt
+     FROM dm_messages dm
+     LEFT JOIN dm_reads dr ON dr.dm_channel_id = dm.dm_channel_id AND dr.user_id = $1
+     WHERE dm.author_id != $1
+       AND (dr.last_read_at IS NULL OR dm.created_at > dr.last_read_at)
+       AND dm.dm_channel_id IN (
+         SELECT dp.dm_channel_id FROM dm_participants dp WHERE dp.user_id = $1
+       )
+     GROUP BY dm.dm_channel_id`,
+    [userId]
+  )
+  const channels = {}
+  for (const r of chRows) channels[r.channel_id] = Number(r.cnt)
+  const dms = {}
+  for (const r of dmRows) dms[r.dm_channel_id] = Number(r.cnt)
+  return { channels, dms }
+}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { UnreadProvider } from '../context/UnreadContext.jsx'
 import ServerSidebar from '../components/ServerSidebar.jsx'
 import ChannelSidebar from '../components/ChannelSidebar.jsx'
 
@@ -19,12 +20,14 @@ export default function AppLayout() {
   )
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white">
-      <ServerSidebar />
-      <ChannelSidebar />
-      <div className="flex flex-1 overflow-hidden">
-        <Outlet />
+    <UnreadProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-white">
+        <ServerSidebar />
+        <ChannelSidebar />
+        <div className="flex flex-1 overflow-hidden">
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </UnreadProvider>
   )
 }

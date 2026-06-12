@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, MessageSquare } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useUnread } from '../context/UnreadContext.jsx'
 import CreateServerModal from './CreateServerModal.jsx'
 import clsx from 'clsx'
 
@@ -23,7 +24,11 @@ export default function ServerSidebar() {
   const navigate = useNavigate()
   const { servers } = useServers()
   const { user } = useAuth()
+  const { unread } = useUnread()
   const [showCreate, setShowCreate] = useState(false)
+
+  const serverHasUnread = (srv) =>
+    srv.categories.flatMap(c => c.channels).some(ch => (unread.channels[ch.id] ?? 0) > 0)
 
   const goServer = (srv) => {
     const first = srv.categories.flatMap(c => c.channels).find(c => c.type === 'text')
@@ -77,7 +82,7 @@ export default function ServerSidebar() {
                   )}>
                     {srv.name}
                   </span>
-                  {srv.unread && (
+                  {serverHasUnread(srv) && (
                     <div className="w-2 h-2 rounded-full bg-[#E53935] shrink-0 ml-auto" />
                   )}
                 </button>

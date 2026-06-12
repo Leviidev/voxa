@@ -1,9 +1,18 @@
 import { Router } from 'express'
-import { createChannel } from '../db.js'
+import { createChannel, markChannelRead } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 router.use(requireAuth)
+
+router.post('/:channelId/read', async (req, res) => {
+  try {
+    await markChannelRead(req.user.id, req.params.channelId)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status ?? 500).json({ error: err.message })
+  }
+})
 
 router.post('/servers/:serverId/channels', async (req, res) => {
   try {

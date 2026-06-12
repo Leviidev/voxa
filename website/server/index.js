@@ -17,6 +17,7 @@ import messageRoutes from './routes/messages.js'
 import userRoutes from './routes/users.js'
 import inviteRoutes from './routes/invites.js'
 import dmRoutes from './routes/dms.js'
+import unreadRoutes from './routes/unread.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -178,6 +179,7 @@ app.use('/api/channels', channelRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/invites', inviteRoutes)
 app.use('/api/dms', dmRoutes)
+app.use('/api/unread', unreadRoutes)
 
 // ─── Static Frontend (production) ─────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {

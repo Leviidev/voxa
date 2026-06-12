@@ -101,6 +101,11 @@ export const api = {
   postReply: (msgId, content) =>
     request(`/messages/${msgId}/replies`, { method: 'POST', body: JSON.stringify({ content }) }),
 
+  // Unread
+  getUnread: () => request('/unread'),
+  markChannelRead: (channelId) => request(`/channels/${channelId}/read`, { method: 'POST' }),
+  markDmRead: (dmId) => request(`/dms/${dmId}/read`, { method: 'POST' }),
+
   // Direct Messages
   getDms: () => request('/dms'),
   openDm: (userId, username) =>

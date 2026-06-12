@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Trash2, Edit3, Check, X, MessageSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
+import { useUnread } from '../context/UnreadContext.jsx'
 import { api } from '../lib/api.js'
 import clsx from 'clsx'
 
@@ -13,6 +14,7 @@ export default function DmChat() {
   const { dmId } = useParams()
   const { user } = useAuth()
   const { socket } = useSocket()
+  const { markDmRead } = useUnread()
   const navigate = useNavigate()
   const [other, setOther] = useState(null)
   const [messages, setMessages] = useState([])
@@ -35,6 +37,7 @@ export default function DmChat() {
       const dm = dms.find(d => d.id === dmId)
       setOther(dm?.other ?? null)
       setMessages(msgs)
+      markDmRead(dmId)
     }).catch(() => navigate('/voxa/me')).finally(() => setLoading(false))
   }, [dmId])
 

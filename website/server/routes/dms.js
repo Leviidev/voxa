@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
-import { openDm, getDmChannels, getDmMessages, sendDmMessage, editDmMessage, deleteDmMessage, findUserByUsername } from '../db.js'
+import { openDm, getDmChannels, getDmMessages, sendDmMessage, editDmMessage, deleteDmMessage, findUserByUsername, markDmRead } from '../db.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -25,6 +25,15 @@ router.post('/', async (req, res) => {
     if (!targetId) return res.status(400).json({ error: 'userId or username required' })
     const dm = await openDm(req.user.id, targetId)
     res.status(201).json(dm)
+  } catch (err) {
+    res.status(err.status ?? 500).json({ error: err.message })
+  }
+})
+
+router.post('/:dmId/read', async (req, res) => {
+  try {
+    await markDmRead(req.user.id, req.params.dmId)
+    res.json({ ok: true })
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })
   }

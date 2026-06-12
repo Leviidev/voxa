@@ -3,6 +3,7 @@ import { Hash, Volume2, ChevronDown, ChevronRight, Mic, Headphones, Settings, Pl
 import { useState, useEffect } from 'react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useUnread } from '../context/UnreadContext.jsx'
 import CreateChannelModal from './CreateChannelModal.jsx'
 import ServerSettingsModal from './ServerSettingsModal.jsx'
 import clsx from 'clsx'
@@ -13,6 +14,7 @@ export default function ChannelSidebar() {
   const { servers } = useServers()
   const server = servers.find(s => s.id === serverId)
   const { user, logout } = useAuth()
+  const { unread } = useUnread()
   const navigate = useNavigate()
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [showServerSettings, setShowServerSettings] = useState(false)
@@ -43,7 +45,7 @@ export default function ChannelSidebar() {
         {/* Channels */}
         <div className="flex-1 overflow-y-auto scrollable py-2">
           {isMe ? (
-            <DMList navigate={navigate} user={user} />
+            <DMList navigate={navigate} user={user} unread={unread} />
           ) : server ? (
             <ServerChannels
               server={server}
@@ -51,6 +53,7 @@ export default function ChannelSidebar() {
               navigate={navigate}
               serverId={serverId}
               onAddChannel={() => setShowCreateChannel(true)}
+              unread={unread}
             />
           ) : (
             <div className="px-4 py-4 text-[#96989D] text-xs">Server not found</div>
@@ -72,7 +75,7 @@ export default function ChannelSidebar() {
   )
 }
 
-function DMList({ navigate, user }) {
+function DMList({ navigate, user, unread }) {
   const { dmId } = useParams()
   const [dms, setDms] = useState([])
   const [showNew, setShowNew] = useState(false)
@@ -150,24 +153,32 @@ function DMList({ navigate, user }) {
         const name = other ? (other.displayName ?? other.username) : '?'
         const color = other?.avatarColor ?? avatarColor(other?.username)
         const active = dm.id === dmId
+        const dmUnread = unread?.dms?.[dm.id] ?? 0
         return (
           <button key={dm.id} onClick={() => navigate(`/voxa/me/dms/${dm.id}`)}
             className={clsx(
               'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
               active ? 'bg-[#E0E2E6]' : 'hover:bg-[#EAEBEE]'
             )}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden"
-              style={{ background: other?.avatarUrl ? undefined : color }}>
-              {other?.avatarUrl
-                ? <img src={other.avatarUrl} alt="" className="w-full h-full object-cover" />
-                : name[0]?.toUpperCase()}
+            <div className="relative shrink-0">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold overflow-hidden"
+                style={{ background: other?.avatarUrl ? undefined : color }}>
+                {other?.avatarUrl
+                  ? <img src={other.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  : name[0]?.toUpperCase()}
+              </div>
+              {dmUnread > 0 && !active && (
+                <div className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#E53935] border-2 border-[#F7F8FA] flex items-center justify-center">
+                  <span className="text-white text-[8px] font-bold leading-none">{dmUnread > 99 ? '99+' : dmUnread}</span>
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className={clsx('text-sm font-medium truncate leading-tight', active ? 'text-[#1A1B1E]' : 'text-[#5C6068]')}>
+              <div className={clsx('text-sm font-medium truncate leading-tight', active ? 'text-[#1A1B1E]' : dmUnread > 0 ? 'text-[#1A1B1E]' : 'text-[#5C6068]')}>
                 {name}
               </div>
               {dm.lastMessage && (
-                <div className="text-[10px] text-[#96989D] truncate leading-tight">
+                <div className={clsx('text-[10px] truncate leading-tight', dmUnread > 0 && !active ? 'text-[#313439] font-medium' : 'text-[#96989D]')}>
                   {dm.lastMessage.content}
                 </div>
               )}
@@ -179,7 +190,7 @@ function DMList({ navigate, user }) {
   )
 }
 
-function ServerChannels({ server, channelId, navigate, serverId, onAddChannel }) {
+function ServerChannels({ server, channelId, navigate, serverId, onAddChannel, unread }) {
   return (
     <div>
       {server.categories.map(cat => (
@@ -190,13 +201,14 @@ function ServerChannels({ server, channelId, navigate, serverId, onAddChannel })
           navigate={navigate}
           serverId={serverId}
           onAddChannel={onAddChannel}
+          unread={unread}
         />
       ))}
     </div>
   )
 }
 
-function Category({ cat, channelId, navigate, serverId, onAddChannel }) {
+function Category({ cat, channelId, navigate, serverId, onAddChannel, unread }) {
   const [collapsed, setCollapsed] = useState(false)
   return (
     <div className="mb-1">
@@ -224,15 +236,17 @@ function Category({ cat, channelId, navigate, serverId, onAddChannel }) {
           active={ch.id === channelId}
           navigate={navigate}
           serverId={serverId}
+          unreadCount={unread?.channels?.[ch.id] ?? 0}
         />
       ))}
     </div>
   )
 }
 
-function ChannelRow({ ch, active, navigate, serverId }) {
+function ChannelRow({ ch, active, navigate, serverId, unreadCount }) {
   const isVoice = ch.type === 'voice'
   const Icon = isVoice ? Volume2 : Hash
+  const hasUnread = !isVoice && unreadCount > 0 && !active
   return (
     <div
       onClick={() => !isVoice && navigate(`/voxa/servers/${serverId}/channels/${ch.id}`)}
@@ -240,13 +254,18 @@ function ChannelRow({ ch, active, navigate, serverId }) {
         'flex items-center gap-2 px-3 py-1.5 mx-2 rounded-lg cursor-pointer transition-colors',
         active
           ? 'bg-[#E0E2E6] text-[#1A1B1E]'
-          : 'text-[#96989D] hover:bg-[#EAEBEE] hover:text-[#5C6068]',
+          : hasUnread
+            ? 'text-[#1A1B1E] hover:bg-[#EAEBEE]'
+            : 'text-[#96989D] hover:bg-[#EAEBEE] hover:text-[#5C6068]',
         isVoice && 'cursor-default'
       )}
     >
       <Icon size={14} className="shrink-0" />
-      <span className="text-sm font-medium flex-1 truncate">{ch.name}</span>
+      <span className={clsx('text-sm flex-1 truncate', hasUnread ? 'font-semibold' : 'font-medium')}>{ch.name}</span>
       {ch.locked && <Lock size={11} className="shrink-0 opacity-60" />}
+      {hasUnread && (
+        <div className="w-2 h-2 rounded-full bg-[#E53935] shrink-0" />
+      )}
     </div>
   )
 }
