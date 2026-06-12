@@ -16,6 +16,7 @@ import channelRoutes from './routes/channels.js'
 import messageRoutes from './routes/messages.js'
 import userRoutes from './routes/users.js'
 import inviteRoutes from './routes/invites.js'
+import dmRoutes from './routes/dms.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -111,6 +112,14 @@ io.on('connection', (socket) => {
     socket.join(`srv:${serverId}`)
   })
 
+  socket.on('dm:join', (dmId) => {
+    socket.join(`dm:${dmId}`)
+  })
+
+  socket.on('dm:leave', (dmId) => {
+    socket.leave(`dm:${dmId}`)
+  })
+
   socket.on('disconnect', () => {
     // Clean up all typing indicators for this user
     for (const [channelId] of typingState) {
@@ -168,6 +177,7 @@ app.use('/api/servers', serverRoutes)
 app.use('/api/channels', channelRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/invites', inviteRoutes)
+app.use('/api/dms', dmRoutes)
 
 // ─── Static Frontend (production) ─────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {

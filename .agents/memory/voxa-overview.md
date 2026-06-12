@@ -9,16 +9,22 @@ description: Key architecture decisions, design system, and deployment notes for
 - **Frontend**: React + Vite, port 5000. Workflow: "Start application" → `cd website && npm run dev`
 - **API**: Express in `website/server/`, port 3001. Workflow: "API Server" → `cd website && npm run api`
 - **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`)
-- **API routes**: `/api/auth/*`, `/api/users/*`, `/api/servers/*`, `/api/channels/*`, `/api/messages/*`, `/api/invites/*`
+- **API routes**: `/api/auth/*`, `/api/users/*`, `/api/servers/*`, `/api/channels/*`, `/api/messages/*`, `/api/invites/*`, `/api/dms/*`
 - **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, JWT_SECRET stored as env var, tokens stored in localStorage as `voxa_token`
 - **Persistence**: Replit PostgreSQL via `pg` Pool (`DATABASE_URL` env var). All db.js functions are async — all route handlers must use `async/await`.
 - **Rate limiting**: express-rate-limit — auth: 8/15min, general: 200/5min, messages: 30/min
 
 ## Database Schema (PostgreSQL)
 
-Tables: `users`, `servers`, `categories`, `channels`, `messages`, `server_members`, `roles`, `member_roles`, `invites`
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`
 - Snake_case columns in DB; camelCase in API responses (mapped in db.js)
 - All `db.js` functions return Promises — every route handler must `await` them
+
+**Key messages quirk:** The `messages` table stores denormalized author info (`author`, `display_name`, `avatar_url`, `avatar_color`, `discriminator`, `timestamp`, `edited`, `parent_id`) — NOT just a foreign key. db.js INSERTs copy these from users table at message creation time.
+
+## Deployment
+
+Configured as **VM** (not static, not autoscale) — required for WebSocket persistence. Build: `cd website && npm install && npm run build`. Run: `cd website && node server/index.js`. The Express server serves the built React app from `website/dist/` (static middleware + catch-all to `index.html`).
 
 ## Design System (Light Theme)
 
@@ -64,11 +70,22 @@ All stored in DB user object and returned from `/api/users/me`:
 - Each inviter gets one reused invite per server (idempotent `POST /api/servers/:id/invites`)
 - Frontend route: `/invite/:code` → `InviteJoin.jsx` page
 
+## DM (Direct Messages) Feature
+
+- Tables: `dm_channels` (conversation), `dm_participants` (who's in it), `dm_messages`
+- Routes: `GET/POST /api/dms`, `GET/POST/PATCH/DELETE /api/dms/:dmId/messages/:msgId`
+- Open a DM by userId OR username (looks up via `findUserByUsername`)
+- Socket room: `dm:{dmChannelId}` — join/leave via `dm:join` / `dm:leave` events
+- Socket events: `dm:message:new`, `dm:message:edit`, `dm:message:delete`
+- Frontend: DM list in `ChannelSidebar.jsx` (when no server selected), chat in `DmChat.jsx`
+- Route: `/voxa/me/dms/:dmId`
+
 ## Key UI Components
 
 - `ProfileEditModal.jsx` — tabbed modal (General, Avatar, Banner); opened from Me.jsx edit button or Settings → Edit Profile
 - `ServerSettingsModal.jsx` — tabbed modal (Overview, Roles, Members, Invites, Danger Zone); opened from hover gear icon on channel sidebar server header
 - `InviteJoin.jsx` — standalone page at `/invite/:code` for joining via invite link
+- `DmChat.jsx` — DM conversation view with real-time messages, edit/delete, and socket integration
 
 ## Express 5 Quirk
 

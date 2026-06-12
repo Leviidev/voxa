@@ -100,4 +100,16 @@ export const api = {
   getThread: (msgId) => request(`/messages/${msgId}/thread`),
   postReply: (msgId, content) =>
     request(`/messages/${msgId}/replies`, { method: 'POST', body: JSON.stringify({ content }) }),
+
+  // Direct Messages
+  getDms: () => request('/dms'),
+  openDm: (userId, username) =>
+    request('/dms', { method: 'POST', body: JSON.stringify({ userId, username }) }),
+  getDmMessages: (dmId, limit = 50) => request(`/dms/${dmId}/messages?limit=${limit}`),
+  sendDmMessage: (dmId, content) =>
+    request(`/dms/${dmId}/messages`, { method: 'POST', body: JSON.stringify({ content }) }),
+  editDmMessage: (dmId, msgId, content) =>
+    request(`/dms/${dmId}/messages/${msgId}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  deleteDmMessage: (dmId, msgId) =>
+    request(`/dms/${dmId}/messages/${msgId}`, { method: 'DELETE' }),
 }

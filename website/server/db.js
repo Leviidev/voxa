@@ -651,3 +651,130 @@ export async function toggleReaction(msgId, userId, emoji) {
   const reactions = await getReactionsForMessage(msgId)
   return { messageId: msgId, channelId: msg.channel_id, reactions }
 }
+
+// ─── Direct Messages ──────────────────────────────────────────────────────────
+
+export async function findUserByUsername(username) {
+  const { rows } = await pool.query(
+    'SELECT id, username, discriminator, display_name, avatar_url, avatar_color FROM users WHERE lower(username) = lower($1)',
+    [username]
+  )
+  return rows[0] ?? null
+}
+
+function shapeDmMessage(m) {
+  return {
+    id: m.id,
+    dmChannelId: m.dm_channel_id,
+    authorId: m.author_id,
+    author: m.username,
+    displayName: m.display_name,
+    avatarUrl: m.avatar_url,
+    avatarColor: m.avatar_color,
+    content: m.content,
+    edited: m.edited,
+    editedAt: m.edited_at,
+    timestamp: m.created_at,
+  }
+}
+
+async function getDmChannel(dmId, myId) {
+  const { rows: participants } = await pool.query(
+    `SELECT u.id, u.username, u.display_name, u.discriminator, u.avatar_url, u.avatar_color, u.status
+     FROM dm_participants dp
+     JOIN users u ON u.id = dp.user_id
+     WHERE dp.dm_channel_id = $1`,
+    [dmId]
+  )
+  const other = participants.find(p => p.id !== myId) ?? participants[0]
+  const { rows: [lastRow] } = await pool.query(
+    `SELECT dm.*, u.username, u.display_name, u.avatar_url, u.avatar_color
+     FROM dm_messages dm JOIN users u ON u.id = dm.author_id
+     WHERE dm.dm_channel_id = $1 ORDER BY dm.created_at DESC LIMIT 1`,
+    [dmId]
+  )
+  return {
+    id: dmId,
+    other: other ? publicUser(other) : null,
+    lastMessage: lastRow ? shapeDmMessage(lastRow) : null,
+  }
+}
+
+export async function openDm(myId, targetId) {
+  if (myId === targetId) throw Object.assign(new Error('Cannot DM yourself'), { status: 400 })
+  const { rows: [target] } = await pool.query('SELECT id FROM users WHERE id = $1', [targetId])
+  if (!target) throw Object.assign(new Error('User not found'), { status: 404 })
+  const { rows: [existing] } = await pool.query(
+    `SELECT dc.id FROM dm_channels dc
+     JOIN dm_participants dp1 ON dp1.dm_channel_id = dc.id AND dp1.user_id = $1
+     JOIN dm_participants dp2 ON dp2.dm_channel_id = dc.id AND dp2.user_id = $2`,
+    [myId, targetId]
+  )
+  if (existing) return getDmChannel(existing.id, myId)
+  const id = generateId('dm_')
+  await pool.query('INSERT INTO dm_channels (id, created_at) VALUES ($1, NOW())', [id])
+  await pool.query(
+    'INSERT INTO dm_participants (dm_channel_id, user_id) VALUES ($1, $2), ($1, $3)',
+    [id, myId, targetId]
+  )
+  return getDmChannel(id, myId)
+}
+
+export async function getDmChannels(userId) {
+  const { rows } = await pool.query(
+    `SELECT dc.id FROM dm_channels dc
+     JOIN dm_participants dp ON dp.dm_channel_id = dc.id AND dp.user_id = $1
+     ORDER BY dc.created_at DESC`,
+    [userId]
+  )
+  return Promise.all(rows.map(r => getDmChannel(r.id, userId)))
+}
+
+export async function getDmMessages(dmId, userId, limit = 50) {
+  const { rows: [member] } = await pool.query(
+    'SELECT 1 FROM dm_participants WHERE dm_channel_id = $1 AND user_id = $2', [dmId, userId]
+  )
+  if (!member) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows } = await pool.query(
+    `SELECT dm.*, u.username, u.display_name, u.avatar_url, u.avatar_color
+     FROM dm_messages dm JOIN users u ON u.id = dm.author_id
+     WHERE dm.dm_channel_id = $1 ORDER BY dm.created_at ASC LIMIT $2`,
+    [dmId, limit]
+  )
+  return rows.map(shapeDmMessage)
+}
+
+export async function sendDmMessage(dmId, userId, content) {
+  const { rows: [member] } = await pool.query(
+    'SELECT 1 FROM dm_participants WHERE dm_channel_id = $1 AND user_id = $2', [dmId, userId]
+  )
+  if (!member) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [userId])
+  const id = generateId('dmsg_')
+  const { rows: [msg] } = await pool.query(
+    `INSERT INTO dm_messages (id, dm_channel_id, author_id, content, edited, created_at)
+     VALUES ($1,$2,$3,$4,false,NOW()) RETURNING *`,
+    [id, dmId, userId, sanitize(content, 2000)]
+  )
+  return shapeDmMessage({ ...msg, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, avatar_color: user.avatar_color })
+}
+
+export async function editDmMessage(msgId, userId, content) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM dm_messages WHERE id = $1', [msgId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id = $1', [userId])
+  const { rows: [updated] } = await pool.query(
+    'UPDATE dm_messages SET content=$1, edited=true, edited_at=NOW() WHERE id=$2 RETURNING *',
+    [sanitize(content, 2000), msgId]
+  )
+  return shapeDmMessage({ ...updated, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, avatar_color: user.avatar_color })
+}
+
+export async function deleteDmMessage(msgId, userId) {
+  const { rows: [msg] } = await pool.query('SELECT * FROM dm_messages WHERE id = $1', [msgId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+  if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query('DELETE FROM dm_messages WHERE id = $1', [msgId])
+  return { dmChannelId: msg.dm_channel_id }
+}

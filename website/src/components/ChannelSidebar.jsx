@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { Hash, Volume2, ChevronDown, ChevronRight, Mic, Headphones, Settings, Plus, Lock } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import CreateChannelModal from './CreateChannelModal.jsx'
 import ServerSettingsModal from './ServerSettingsModal.jsx'
 import clsx from 'clsx'
+import { api } from '../lib/api.js'
 
 export default function ChannelSidebar() {
   const { serverId, channelId } = useParams()
@@ -72,12 +73,108 @@ export default function ChannelSidebar() {
 }
 
 function DMList({ navigate, user }) {
+  const { dmId } = useParams()
+  const [dms, setDms] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [newError, setNewError] = useState('')
+  const [newLoading, setNewLoading] = useState(false)
+
+  useEffect(() => {
+    api.getDms().then(setDms).catch(() => {})
+  }, [])
+
+  const openNewDm = async (e) => {
+    e.preventDefault()
+    const name = newUsername.trim()
+    if (!name) return
+    setNewLoading(true)
+    setNewError('')
+    try {
+      const dm = await api.openDm(undefined, name)
+      setDms(prev => prev.find(d => d.id === dm.id) ? prev : [dm, ...prev])
+      setShowNew(false)
+      setNewUsername('')
+      navigate(`/voxa/me/dms/${dm.id}`)
+    } catch (err) {
+      setNewError(err.message)
+    } finally {
+      setNewLoading(false)
+    }
+  }
+
+  const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
+  const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
+
   return (
     <div className="px-2">
-      <p className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] px-2 pt-2 pb-1">Direct Messages</p>
-      <div className="py-6 text-center">
-        <p className="text-[#96989D] text-xs leading-relaxed">No messages yet.<br />Find friends to chat with.</p>
+      <div className="flex items-center justify-between px-2 pt-2 pb-1">
+        <p className="text-[9px] font-bold uppercase tracking-widest text-[#96989D]">Direct Messages</p>
+        <button onClick={() => setShowNew(v => !v)}
+          className="text-[#96989D] hover:text-[#5C6068] transition-colors" title="New DM">
+          <Plus size={13} />
+        </button>
       </div>
+
+      {showNew && (
+        <form onSubmit={openNewDm} className="mx-1 mb-2">
+          <input
+            autoFocus
+            value={newUsername}
+            onChange={e => { setNewUsername(e.target.value); setNewError('') }}
+            placeholder="Enter username"
+            className="w-full bg-white border border-[#E3E5E8] focus:border-[#E53935] rounded-lg px-3 py-1.5 text-xs text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors"
+          />
+          {newError && <p className="text-[10px] text-[#E53935] mt-1 px-1">{newError}</p>}
+          <div className="flex gap-1 mt-1">
+            <button type="submit" disabled={newLoading || !newUsername.trim()}
+              className="flex-1 bg-[#E53935] disabled:opacity-40 text-white rounded-lg py-1 text-[11px] font-semibold transition-colors hover:bg-[#C62828]">
+              {newLoading ? '…' : 'Open DM'}
+            </button>
+            <button type="button" onClick={() => { setShowNew(false); setNewUsername(''); setNewError('') }}
+              className="px-2 bg-[#F2F3F5] text-[#5C6068] rounded-lg py-1 text-[11px] font-medium hover:bg-[#EAEBEE] transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {dms.length === 0 && !showNew && (
+        <div className="py-6 text-center">
+          <p className="text-[#96989D] text-xs leading-relaxed">No messages yet.<br />Click + to start a DM.</p>
+        </div>
+      )}
+
+      {dms.map(dm => {
+        const other = dm.other
+        const name = other ? (other.displayName ?? other.username) : '?'
+        const color = other?.avatarColor ?? avatarColor(other?.username)
+        const active = dm.id === dmId
+        return (
+          <button key={dm.id} onClick={() => navigate(`/voxa/me/dms/${dm.id}`)}
+            className={clsx(
+              'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
+              active ? 'bg-[#E0E2E6]' : 'hover:bg-[#EAEBEE]'
+            )}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden"
+              style={{ background: other?.avatarUrl ? undefined : color }}>
+              {other?.avatarUrl
+                ? <img src={other.avatarUrl} alt="" className="w-full h-full object-cover" />
+                : name[0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={clsx('text-sm font-medium truncate leading-tight', active ? 'text-[#1A1B1E]' : 'text-[#5C6068]')}>
+                {name}
+              </div>
+              {dm.lastMessage && (
+                <div className="text-[10px] text-[#96989D] truncate leading-tight">
+                  {dm.lastMessage.content}
+                </div>
+              )}
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }

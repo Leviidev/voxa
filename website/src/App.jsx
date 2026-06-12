@@ -5,6 +5,7 @@ import AppLayout from './pages/AppLayout.jsx'
 import Me from './pages/Me.jsx'
 import ServerView from './pages/ServerView.jsx'
 import InviteJoin from './pages/InviteJoin.jsx'
+import DmChat from './components/DmChat.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
 import { SocketProvider } from './context/SocketContext.jsx'
@@ -21,6 +22,7 @@ function AppWithSocket() {
           <Route path="/voxa" element={<AppLayout />}>
             <Route index element={<Navigate to="/voxa/me" replace />} />
             <Route path="me" element={<Me />} />
+            <Route path="me/dms/:dmId" element={<DmChat />} />
             <Route path="servers/:serverId" element={<ServerView />} />
             <Route path="servers/:serverId/channels/:channelId" element={<ServerView />} />
           </Route>
