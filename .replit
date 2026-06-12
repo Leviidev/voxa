@@ -66,4 +66,3 @@ publicDir = "website/dist"
 [userenv]
 
 [userenv.shared]
-JWT_SECRET = "36086140be60a4cd7adddfbe2875fcd3ad8ccb4ee830ba5d11b1e63222d33281902285dd150ed4b02b402d100e9fcc04"
