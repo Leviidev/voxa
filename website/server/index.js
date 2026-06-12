@@ -21,7 +21,7 @@ import unreadRoutes from './routes/unread.js'
 
 const app = express()
 const httpServer = createServer(app)
-const PORT = process.env.API_PORT || 3001
+const PORT = process.env.PORT || process.env.API_PORT || 3001
 const JWT_SECRET = process.env.JWT_SECRET || 'voxa_dev_secret_change_in_prod'
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
