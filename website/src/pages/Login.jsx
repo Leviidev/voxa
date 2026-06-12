@@ -15,7 +15,7 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { register, user } = useAuth()
+  const { login, register, user } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => { if (user) navigate('/voxa/me') }, [user])
@@ -32,12 +32,11 @@ export default function Login() {
         await register(form.email, form.username, form.password)
         navigate('/voxa/me')
       } else {
-        const data = await api.login(form.email, form.password)
-        if (data.requires2FA) {
+        const data = await login(form.email, form.password)
+        if (data?.requires2FA) {
           setTwoFA({ tempToken: data.tempToken })
         } else {
-          localStorage.setItem('voxa_token', data.token)
-          window.location.href = '/voxa/me'
+          navigate('/voxa/me')
         }
       }
     } catch (err) {
