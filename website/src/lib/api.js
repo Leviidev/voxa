@@ -93,4 +93,6 @@ export const api = {
     request(`/messages/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   deleteMessage: (id) =>
     request(`/messages/${id}`, { method: 'DELETE' }),
+  toggleReaction: (msgId, emoji) =>
+    request(`/messages/${msgId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
 }

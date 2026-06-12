@@ -495,9 +495,35 @@ export async function deleteInvite(code, userId) {
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 
+function shapeReactions(raw) {
+  if (!raw) return {}
+  // raw is already a JS object from pg jsonb parsing
+  const out = {}
+  for (const [emoji, val] of Object.entries(raw)) {
+    out[emoji] = { count: Number(val.count), userIds: val.userIds ?? [] }
+  }
+  return out
+}
+
 export async function getMessages(channelId, limit = 50) {
   const { rows } = await pool.query(
-    'SELECT * FROM messages WHERE channel_id=$1 ORDER BY timestamp ASC LIMIT $2',
+    `SELECT m.*,
+       COALESCE(
+         (
+           SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+           FROM (
+             SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+             FROM message_reactions
+             WHERE message_id = m.id
+             GROUP BY emoji
+           ) sub
+         ),
+         '{}'::jsonb
+       ) AS reactions
+     FROM messages m
+     WHERE m.channel_id = $1
+     ORDER BY m.timestamp ASC
+     LIMIT $2`,
     [channelId, limit]
   )
   return rows.map(m => ({
@@ -506,6 +532,7 @@ export async function getMessages(channelId, limit = 50) {
     avatarUrl: m.avatar_url, avatarColor: m.avatar_color,
     discriminator: m.discriminator, content: m.content,
     timestamp: m.timestamp, edited: m.edited, editedAt: m.edited_at,
+    reactions: shapeReactions(m.reactions),
   }))
 }
 
@@ -554,4 +581,47 @@ export async function deleteMessage(msgId, userId) {
   if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   await pool.query('DELETE FROM messages WHERE id=$1', [msgId])
   return { channelId: msg.channel_id }
+}
+
+// ─── Reactions ────────────────────────────────────────────────────────────────
+
+async function getReactionsForMessage(msgId) {
+  const { rows } = await pool.query(
+    `SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+     FROM message_reactions WHERE message_id=$1 GROUP BY emoji`,
+    [msgId]
+  )
+  const out = {}
+  for (const r of rows) {
+    out[r.emoji] = { count: Number(r.cnt), userIds: r.user_ids }
+  }
+  return out
+}
+
+export async function toggleReaction(msgId, userId, emoji) {
+  // Validate: only allow actual emojis (unicode, up to 8 chars grapheme cluster)
+  if (!emoji || emoji.length > 12) throw Object.assign(new Error('Invalid emoji'), { status: 400 })
+
+  const { rows: [msg] } = await pool.query('SELECT channel_id FROM messages WHERE id=$1', [msgId])
+  if (!msg) throw Object.assign(new Error('Message not found'), { status: 404 })
+
+  const { rows: [existing] } = await pool.query(
+    'SELECT 1 FROM message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3',
+    [msgId, userId, emoji]
+  )
+
+  if (existing) {
+    await pool.query(
+      'DELETE FROM message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3',
+      [msgId, userId, emoji]
+    )
+  } else {
+    await pool.query(
+      'INSERT INTO message_reactions (message_id, user_id, emoji) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+      [msgId, userId, emoji]
+    )
+  }
+
+  const reactions = await getReactionsForMessage(msgId)
+  return { messageId: msgId, channelId: msg.channel_id, reactions }
 }

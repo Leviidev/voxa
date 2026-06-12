@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getMessages, createMessage, editMessage, deleteMessage } from '../db.js'
+import { getMessages, createMessage, editMessage, deleteMessage, toggleReaction } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
@@ -21,7 +21,6 @@ router.post('/channels/:channelId/messages', async (req, res) => {
     if (content.length > 2000) return res.status(400).json({ error: 'Message too long (max 2000 chars)' })
     const msg = await createMessage({ channelId: req.params.channelId, userId: req.user.id, content })
     res.status(201).json(msg)
-    // Broadcast to everyone else in the channel room
     req.app.locals.io?.to(`ch:${req.params.channelId}`).emit('message:new', msg)
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })
@@ -48,6 +47,18 @@ router.delete('/:msgId', async (req, res) => {
       id: req.params.msgId,
       channelId,
     })
+  } catch (err) {
+    res.status(err.status ?? 500).json({ error: err.message })
+  }
+})
+
+router.post('/:msgId/reactions', async (req, res) => {
+  try {
+    const { emoji } = req.body
+    if (!emoji) return res.status(400).json({ error: 'emoji required' })
+    const result = await toggleReaction(req.params.msgId, req.user.id, emoji)
+    res.json(result)
+    req.app.locals.io?.to(`ch:${result.channelId}`).emit('reaction:update', result)
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })
   }

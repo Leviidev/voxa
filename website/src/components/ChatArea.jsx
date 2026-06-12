@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, Wifi, WifiOff } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
@@ -9,10 +9,12 @@ import clsx from 'clsx'
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
 
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '😮', '😢', '👀']
+
 export default function ChatArea({ channel, server }) {
   const { user } = useAuth()
   const { connected } = useSocket()
-  const { messages, loading, addMessage, deleteMessage, editMessage } = useMessages(channel?.id)
+  const { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction } = useMessages(channel?.id)
   const { typers, onTyping, stopTyping } = useTyping(channel?.id, user)
   const [input, setInput] = useState('')
   const [showMembers, setShowMembers] = useState(false)
@@ -23,7 +25,6 @@ export default function ChatArea({ channel, server }) {
   const inputRef = useRef(null)
   const prevChannelId = useRef(channel?.id)
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: prevChannelId.current !== channel?.id ? 'instant' : 'smooth' })
     prevChannelId.current = channel?.id
@@ -70,7 +71,7 @@ export default function ChatArea({ channel, server }) {
 
   return (
     <div className="flex-1 flex flex-col bg-white overflow-hidden">
-      {/* Connection banner */}
+      {/* Reconnecting banner */}
       {!connected && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 shrink-0">
           <WifiOff size={13} className="text-amber-600 shrink-0" />
@@ -92,9 +93,8 @@ export default function ChatArea({ channel, server }) {
         )}
         <div className="flex-1" />
         <div className="flex items-center gap-0.5">
-          {/* Live indicator */}
           {connected && (
-            <div className="flex items-center gap-1 mr-2" title="Live — messages update in real time">
+            <div className="flex items-center gap-1 mr-2" title="Live — real-time updates active">
               <div className="w-1.5 h-1.5 rounded-full bg-[#23a55a] animate-pulse" />
               <span className="text-[10px] text-[#96989D] hidden sm:block">Live</span>
             </div>
@@ -110,7 +110,7 @@ export default function ChatArea({ channel, server }) {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Messages */}
+        {/* Messages + Input column */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto scrollable px-4 py-4 flex flex-col gap-0.5">
             {loading && messages.length === 0 && (
@@ -128,6 +128,7 @@ export default function ChatArea({ channel, server }) {
                   key={msg.id}
                   msg={msg}
                   grouped={grouped}
+                  currentUserId={user?.id}
                   isOwn={msg.authorId === user?.id || msg.author === user?.username}
                   editing={editingId === msg.id}
                   editVal={editVal}
@@ -136,6 +137,7 @@ export default function ChatArea({ channel, server }) {
                   onSubmitEdit={() => submitEdit(msg.id)}
                   onCancelEdit={() => setEditingId(null)}
                   onDelete={() => deleteMessage(msg.id)}
+                  onReact={(emoji) => toggleReaction(msg.id, emoji)}
                 />
               )
             })}
@@ -147,7 +149,7 @@ export default function ChatArea({ channel, server }) {
 
           {/* Send error */}
           {sendError && (
-            <div className="px-4 pb-1">
+            <div className="px-5 pb-1">
               <p className="text-red-500 text-xs">{sendError}</p>
             </div>
           )}
@@ -163,9 +165,7 @@ export default function ChatArea({ channel, server }) {
                 ref={inputRef}
                 value={input}
                 onChange={e => { setInput(e.target.value); onTyping() }}
-                onKeyDown={e => {
-                  if (e.key === 'Escape') { setInput(''); stopTyping() }
-                }}
+                onKeyDown={e => { if (e.key === 'Escape') { setInput(''); stopTyping() } }}
                 placeholder={`Message #${channel?.name ?? 'general'}`}
                 className="flex-1 bg-transparent text-[#1A1B1E] text-sm py-3 outline-none placeholder:text-[#96989D]"
                 maxLength={2000}
@@ -186,9 +186,9 @@ export default function ChatArea({ channel, server }) {
   )
 }
 
+// ── Typing indicator ──────────────────────────────────────────────────────────
 function TypingIndicator({ typers }) {
   if (!typers.length) return <div className="h-5 shrink-0 px-5" />
-
   const names = typers.slice(0, 3).map(t => t.username)
   let label
   if (names.length === 1) label = `${names[0]} is typing`
@@ -212,6 +212,7 @@ function TypingIndicator({ typers }) {
   )
 }
 
+// ── Top bar button ────────────────────────────────────────────────────────────
 function TopBtn({ icon: Icon, label, onClick, active }) {
   return (
     <button title={label} onClick={onClick}
@@ -224,6 +225,7 @@ function TopBtn({ icon: Icon, label, onClick, active }) {
   )
 }
 
+// ── Channel welcome banner ────────────────────────────────────────────────────
 function ChannelWelcome({ channel }) {
   return (
     <div className="mb-6 pb-4 border-b border-[#F2F3F5]">
@@ -236,10 +238,72 @@ function ChannelWelcome({ channel }) {
   )
 }
 
-function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit, onSubmitEdit, onCancelEdit, onDelete }) {
+// ── Reaction pills ────────────────────────────────────────────────────────────
+function ReactionPills({ reactions, currentUserId, onReact }) {
+  if (!reactions || !Object.keys(reactions).length) return null
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {Object.entries(reactions).map(([emoji, { count, userIds }]) => {
+        const reacted = userIds.includes(currentUserId)
+        return (
+          <button
+            key={emoji}
+            onClick={() => onReact(emoji)}
+            title={`${count} reaction${count !== 1 ? 's' : ''}`}
+            className={clsx(
+              'flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all',
+              reacted
+                ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]'
+                : 'bg-[#F2F3F5] border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] hover:border-[#D5D7DC]'
+            )}
+          >
+            <span>{emoji}</span>
+            <span>{count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Quick emoji picker (shown on hover) ───────────────────────────────────────
+function QuickReactPicker({ onReact, onClose }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handle(e) {
+      if (ref.current && !ref.current.contains(e.target)) onClose()
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [onClose])
+
+  return (
+    <div ref={ref}
+      className="absolute bottom-full right-0 mb-1 bg-white border border-[#E3E5E8] rounded-xl shadow-lg p-1.5 flex gap-0.5 z-50">
+      {QUICK_EMOJIS.map(e => (
+        <button key={e} onClick={() => { onReact(e); onClose() }}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-lg hover:bg-[#F2F3F5] transition-colors"
+          title={e}>
+          {e}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Message row ───────────────────────────────────────────────────────────────
+function Message({ msg, grouped, currentUserId, isOwn, editing, editVal, onEditVal,
+  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact }) {
+  const [showPicker, setShowPicker] = useState(false)
   const color = msg.avatarColor || avatarColor(msg.author)
   const isOptimistic = msg.id?.startsWith('opt_')
   const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+  const reactions = (
+    <ReactionPills reactions={msg.reactions} currentUserId={currentUserId} onReact={onReact} />
+  )
 
   if (editing) {
     return (
@@ -271,24 +335,26 @@ function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit
   }
 
   if (grouped) return (
-    <div className={clsx(
-      'flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5',
-      isOptimistic && 'opacity-60'
-    )}>
+    <div className={clsx('flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5', isOptimistic && 'opacity-60')}>
       <span className="text-[#96989D] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
-      <p className="text-sm text-[#313439] leading-relaxed flex-1">
-        {msg.content}
-        {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
-      </p>
-      {isOwn && !isOptimistic && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-[#313439] leading-relaxed">
+          {msg.content}
+          {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
+        </p>
+        {reactions}
+      </div>
+      {!isOptimistic && (
+        <div className="relative">
+          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete} onReactOpen={() => setShowPicker(v => !v)} />
+          {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
+        </div>
+      )}
     </div>
   )
 
   return (
-    <div className={clsx(
-      'flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2',
-      isOptimistic && 'opacity-60'
-    )}>
+    <div className={clsx('flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2', isOptimistic && 'opacity-60')}>
       <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5 overflow-hidden"
         style={{ background: msg.avatarUrl ? undefined : color }}>
         {msg.avatarUrl
@@ -305,27 +371,43 @@ function Message({ msg, grouped, isOwn, editing, editVal, onEditVal, onStartEdit
           {msg.content}
           {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
         </p>
+        {reactions}
       </div>
-      {isOwn && !isOptimistic && <MessageActions onEdit={onStartEdit} onDelete={onDelete} />}
+      {!isOptimistic && (
+        <div className="relative">
+          <MessageActions isOwn={isOwn} onEdit={onStartEdit} onDelete={onDelete} onReactOpen={() => setShowPicker(v => !v)} />
+          {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
+        </div>
+      )}
     </div>
   )
 }
 
-function MessageActions({ onEdit, onDelete }) {
+// ── Action buttons row ────────────────────────────────────────────────────────
+function MessageActions({ isOwn, onEdit, onDelete, onReactOpen }) {
   return (
     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
-      <button onClick={onEdit} title="Edit"
-        className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors">
-        <Edit3 size={12} />
+      <button onClick={onReactOpen} title="Add Reaction"
+        className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors text-base">
+        😊
       </button>
-      <button onClick={onDelete} title="Delete"
-        className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#E53935] hover:border-red-200 shadow-sm transition-colors">
-        <Trash2 size={12} />
-      </button>
+      {isOwn && (
+        <>
+          <button onClick={onEdit} title="Edit"
+            className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors">
+            <Edit3 size={12} />
+          </button>
+          <button onClick={onDelete} title="Delete"
+            className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#E53935] hover:border-red-200 shadow-sm transition-colors">
+            <Trash2 size={12} />
+          </button>
+        </>
+      )}
     </div>
   )
 }
 
+// ── Member list panel ─────────────────────────────────────────────────────────
 function MemberList({ members }) {
   const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#96989D' }
 

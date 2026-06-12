@@ -81,6 +81,25 @@ All stored in DB user object and returned from `/api/users/me`:
 - `express-rate-limit` v7 `keyGenerator` that uses `req.ip` will throw `ERR_ERL_KEY_GEN_IPV6` validation error
 - Use default keyGenerator (no custom one) unless you need per-user limiting — the default handles IPv6 correctly
 
+## Real-time (Socket.IO)
+
+- Server: `socket.io` on the same HTTP server as Express (`createServer(app)` + `httpServer.listen`)
+- Vite proxies `/socket.io` → `http://localhost:3001` with `ws: true`
+- Client singleton in `src/lib/socket.js` — call `getSocket(token)` once; reconnects automatically
+- `SocketContext.jsx` wraps the app (inside AuthProvider); provides `{ socket, connected }`
+- Channel rooms: `ch:{channelId}` — join on channel mount, leave on unmount
+- Socket events: `message:new`, `message:edit`, `message:delete`, `reaction:update`, `typing:update`
+- Typing: `typing:start { channelId, username }` / `typing:stop { channelId }` — server auto-clears after 4s
+- Route handlers emit to `req.app.locals.io`
+
+## Reactions
+
+- `message_reactions` table: `(message_id, user_id, emoji)` composite PK
+- Toggle endpoint: `POST /api/messages/:msgId/reactions { emoji }` — adds or removes
+- `getMessages` query uses correlated subquery to attach reactions as `jsonb_object_agg`
+- `reaction:update` socket event carries `{ messageId, channelId, reactions }` — full reactions map
+- Quick-pick bar: 8 common emojis on hover; highlighted pill if current user reacted
+
 ## API Client (frontend)
 
 - `src/lib/api.js` checks `content-type` header before calling `res.json()` — returns "Server is starting up" message if HTML is received instead of JSON
