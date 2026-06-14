@@ -94,6 +94,11 @@ export async function getUserById(id) {
   return rows.length ? publicUser(rows[0]) : null
 }
 
+export async function getUserByIdFull(id) {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id])
+  return rows.length ? publicUserFull(rows[0]) : null
+}
+
 export async function updateUser(userId, fields) {
   const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [userId])
   if (!rows.length) throw Object.assign(new Error('User not found'), { status: 404 })

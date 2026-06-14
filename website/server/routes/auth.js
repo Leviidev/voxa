@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createUser, verifyUser, getUserById, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification, recordLoginHistory } from '../db.js'
+import { createUser, verifyUser, getUserById, getUserByIdFull, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification, recordLoginHistory } from '../db.js'
 import { signToken, signTempToken, requireAuth } from '../middleware/auth.js'
 import { sendPasswordResetEmail, sendVerificationEmail } from '../email.js'
 import { parseDevice, parseIp } from '../utils.js'
@@ -18,7 +18,7 @@ router.post('/register', async (req, res) => {
     createEmailVerification(user.id)
       .then(vToken => sendVerificationEmail(email, vToken))
       .catch(err => console.error('Verification email failed:', err.message))
-    res.status(201).json({ token, user })
+    res.status(201).json({ token, user: { ...user, email: email.toLowerCase() } })
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })
   }
@@ -43,7 +43,7 @@ router.post('/login', async (req, res) => {
       ip: parseIp(req),
       device: parseDevice(req.headers['user-agent']),
     }).catch(() => {})
-    res.json({ token, user })
+    res.json({ token, user: { ...user, email: email.toLowerCase() } })
   } catch (err) {
     res.status(err.status ?? 500).json({ error: err.message })
   }
@@ -51,7 +51,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await getUserById(req.user.id)
+    const user = await getUserByIdFull(req.user.id)
     if (!user) return res.status(404).json({ error: 'User not found' })
     res.json(user)
   } catch (err) {
