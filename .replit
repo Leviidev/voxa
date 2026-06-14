@@ -85,3 +85,4 @@ run = ["bash", "-c", "cd website && node server/index.js"]
 ADMIN_PASSWORD_HASH = "$2b$12$alU4QGknBlzCck80v3qgd.VACf.fbJ4DjSNtpbZIwQIER4EGWURG."
 GITHUB_REPO = "leviidev/voxa"
 GITHUB_TOKEN = "your_github_pat_here"
+JWT_SECRET = "a7fd1596220366d5ae302cb2d2fac8f9436ae17fd43baa10183a9b3066c63fd5f4a598eb2f761e5659e5a3c65d595cb7"
