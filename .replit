@@ -22,10 +22,6 @@ args = "Start application"
 task = "workflow.run"
 args = "API Server"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Build Android APK"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -50,17 +46,6 @@ task = "shell.exec"
 args = "cd website && node server/index.js"
 waitForPort = 3001
 
-[[workflows.workflow]]
-name = "Build Android APK"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd android && bash build_apk.sh"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[ports]]
 localPort = 3001
 externalPort = 3001
@@ -82,7 +67,4 @@ run = ["bash", "-c", "cd website && node server/index.js"]
 [userenv]
 
 [userenv.shared]
-ADMIN_PASSWORD_HASH = "$2b$12$alU4QGknBlzCck80v3qgd.VACf.fbJ4DjSNtpbZIwQIER4EGWURG."
 GITHUB_REPO = "leviidev/voxa"
-GITHUB_TOKEN = "your_github_pat_here"
-JWT_SECRET = "a7fd1596220366d5ae302cb2d2fac8f9436ae17fd43baa10183a9b3066c63fd5f4a598eb2f761e5659e5a3c65d595cb7"
