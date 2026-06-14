@@ -22,6 +22,10 @@ args = "Start application"
 task = "workflow.run"
 args = "API Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Build Android APK"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -45,6 +49,17 @@ outputType = "console"
 task = "shell.exec"
 args = "cd website && node server/index.js"
 waitForPort = 3001
+
+[[workflows.workflow]]
+name = "Build Android APK"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd android && bash build_apk.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 3001

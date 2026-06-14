@@ -1,0 +1,5 @@
+-keep class com.voxa.app.data.model.** { *; }
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class kotlinx.serialization.** { *; }

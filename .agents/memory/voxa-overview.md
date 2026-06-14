@@ -104,6 +104,19 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - `UserAvatarBubble`, `ServerIconView`, `ServerAcronymView` defined in `ServerListView.swift` — accessible across all files in same module without import
 - `User.swiftAvatarColor` and `ServerMember.swiftAvatarColor` are computed Color properties; `User.avatarColor` is `String?` (raw hex from API)
 
+## Android App (android/)
+
+- Package: `com.voxa.app`, minSdk 26, compileSdk 34, targetSdk 34
+- Stack: Kotlin 1.9.22, Jetpack Compose BOM 2024.02.00, Compose Compiler 1.5.10, AGP 8.2.2, Gradle 8.5
+- Dependencies: OkHttp 4.12, kotlinx-serialization-json 1.6.3, Coil 2.6.0, DataStore 1.0.0, Navigation Compose 2.7.7, Material3
+- **Socket.IO v4 client**: manual OkHttp WebSocket in `SocketClient.kt` — EIO handshake: receive `0{...}` → send `40{"token":"<JWT>"}` → receive `40{...}` = connected → events as `42["event", payload]`; ping `2` → pong `3`
+- **No wrapper JAR**: `gradlew` falls back to downloaded Gradle; use `build_apk.sh` for full build (downloads JDK17+Gradle+AndroidSDK)
+- Navigation: single `NavHost` in `MainScreen.kt`, bottom bar hides on chat/detail screens
+- **Import rule**: `avatarColorForName()` lives in `com.voxa.app.ui.components` (Common.kt), NOT in Models.kt
+- Token persistence: DataStore Preferences (`voxa_token` + `voxa_user` keys)
+- API base URL hardcoded to `https://voxa.lol` in both `ApiClient.kt` and `SocketClient.kt`
+- Build workflow: "Build Android APK" → `cd android && bash build_apk.sh`
+
 ## Key Design Decisions
 
 - Server sidebar (220px) is a **dark floating card**: `m-2 bg-[#111214] rounded-2xl shadow-2xl border border-white/[0.05]` — unique vs Discord

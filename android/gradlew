@@ -1,0 +1,21 @@
+#!/bin/sh
+# Standard Gradle wrapper script (no wrapper JAR needed — delegates to build_apk.sh or downloaded Gradle)
+
+# Try wrapper JAR first (if it exists)
+if [ -f "$(dirname "$0")/gradle/wrapper/gradle-wrapper.jar" ]; then
+  exec java -jar "$(dirname "$0")/gradle/wrapper/gradle-wrapper.jar" "$@"
+fi
+
+# Fall back to system/PATH Gradle
+if command -v gradle &>/dev/null; then
+  exec gradle "$@"
+fi
+
+# Fall back to downloaded Gradle from build_apk.sh cache
+CACHED="$HOME/.voxa-build/gradle-8.5/bin/gradle"
+if [ -f "$CACHED" ]; then
+  exec "$CACHED" "$@"
+fi
+
+echo "Gradle not found. Run build_apk.sh first to download Gradle."
+exit 1
