@@ -83,3 +83,4 @@ run = ["bash", "-c", "cd website && node server/index.js"]
 
 [userenv.shared]
 ADMIN_PASSWORD_HASH = "$2b$12$alU4QGknBlzCck80v3qgd.VACf.fbJ4DjSNtpbZIwQIER4EGWURG."
+GITHUB_REPO = "leviidev/voxa"
