@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createUser, verifyUser, getUserById, getUserByIdFull, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification, recordLoginHistory } from '../db.js'
+import { createUser, verifyUser, getUserById, getUserByIdFull, getUserByEmail, getUserWithSecurity, createPasswordReset, usePasswordReset, createEmailVerification, useEmailVerification, recordLoginHistory, changePassword } from '../db.js'
 import { signToken, signTempToken, requireAuth } from '../middleware/auth.js'
 import { sendPasswordResetEmail, sendVerificationEmail } from '../email.js'
 import { parseDevice, parseIp } from '../utils.js'
@@ -73,6 +73,18 @@ router.post('/forgot-password', async (req, res) => {
     await sendPasswordResetEmail(email, token)
   } catch (err) {
     console.error('Forgot password error:', err.message)
+  }
+})
+
+router.patch('/change-password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both current and new password are required' })
+    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    await changePassword(req.user.id, currentPassword, newPassword)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status ?? 500).json({ error: err.message })
   }
 })
 

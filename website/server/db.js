@@ -1237,6 +1237,40 @@ export async function getReleaseHistory(platform = 'windows', limit = 10) {
   return rows
 }
 
+// ─── Change Password ──────────────────────────────────────────────────────────
+
+export async function changePassword(userId, currentPassword, newPassword) {
+  const { rows } = await pool.query('SELECT password_hash FROM users WHERE id = $1', [userId])
+  if (!rows[0]) { const err = new Error('User not found'); err.status = 404; throw err }
+  const valid = await bcrypt.compare(currentPassword, rows[0].password_hash)
+  if (!valid) { const err = new Error('Current password is incorrect'); err.status = 400; throw err }
+  const hash = await bcrypt.hash(newPassword, 12)
+  await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId])
+  return { ok: true }
+}
+
+// ─── Channel Management ───────────────────────────────────────────────────────
+
+export async function renameChannel(channelId, userId, name) {
+  const { rows: ch } = await pool.query('SELECT id, server_id FROM channels WHERE id = $1', [channelId])
+  if (!ch[0]) { const err = new Error('Channel not found'); err.status = 404; throw err }
+  const { rows: mb } = await pool.query('SELECT is_owner FROM server_members WHERE server_id = $1 AND user_id = $2', [ch[0].server_id, userId])
+  if (!mb[0]?.is_owner) { const err = new Error('Only the server owner can rename channels'); err.status = 403; throw err }
+  const { rows } = await pool.query('UPDATE channels SET name = $1 WHERE id = $2 RETURNING *', [sanitize(name, 100), channelId])
+  return rows[0]
+}
+
+export async function deleteChannel(channelId, userId) {
+  const { rows: ch } = await pool.query('SELECT id, server_id FROM channels WHERE id = $1', [channelId])
+  if (!ch[0]) { const err = new Error('Channel not found'); err.status = 404; throw err }
+  const { rows: mb } = await pool.query('SELECT is_owner FROM server_members WHERE server_id = $1 AND user_id = $2', [ch[0].server_id, userId])
+  if (!mb[0]?.is_owner) { const err = new Error('Only the server owner can delete channels'); err.status = 403; throw err }
+  const { rows: total } = await pool.query("SELECT COUNT(*) as cnt FROM channels WHERE server_id = $1 AND type = 'text'", [ch[0].server_id])
+  if (parseInt(total[0].cnt) <= 1) { const err = new Error('Cannot delete the last text channel'); err.status = 400; throw err }
+  await pool.query('DELETE FROM channels WHERE id = $1', [channelId])
+  return { ok: true }
+}
+
 // ─── Admin Stats ──────────────────────────────────────────────────────────────
 
 export async function getAdminStats() {

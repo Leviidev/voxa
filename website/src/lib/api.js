@@ -87,6 +87,10 @@ export const api = {
     request(`/channels/servers/${serverId}/channels`, { method: 'POST', body: JSON.stringify({ name, type }) }),
   updateChannelTopic: (channelId, topic) =>
     request(`/channels/${channelId}/topic`, { method: 'PATCH', body: JSON.stringify({ topic }) }),
+  renameChannel: (channelId, name) =>
+    request(`/channels/${channelId}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteChannel: (channelId) =>
+    request(`/channels/${channelId}`, { method: 'DELETE' }),
 
   // Pins
   getPins: (channelId) => request(`/channels/${channelId}/pins`),
@@ -138,6 +142,8 @@ export const api = {
     request('/auth/passkey/authenticate', { method: 'POST', body: JSON.stringify({ sessionKey, response }) }),
   deletePasskey: (id) => request(`/auth/passkey/${id}`, { method: 'DELETE' }),
   getLoginHistory: () => request('/auth/login-history'),
+  changePassword: (currentPassword, newPassword) =>
+    request('/auth/change-password', { method: 'PATCH', body: JSON.stringify({ currentPassword, newPassword }) }),
 
   // Unread
   getUnread: () => request('/unread'),

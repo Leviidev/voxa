@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, MoreVertical } from 'lucide-react'
+import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, MoreVertical, Hash, Volume2 } from 'lucide-react'
 import { api } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useServers } from '../context/ServersContext.jsx'
@@ -30,6 +30,7 @@ const PERMISSIONS_LIST = [
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
+  { id: 'channels', label: 'Channels', icon: Hash },
   { id: 'roles', label: 'Roles', icon: Shield },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'invites', label: 'Invites', icon: Link2 },
@@ -92,6 +93,9 @@ export default function ServerSettingsModal({ server: initialServer, onClose }) 
             )}
             {tab === 'members' && (
               <MembersTab server={server} isOwner={isOwner} currentUserId={user?.id} onRefresh={refreshServer} />
+            )}
+            {tab === 'channels' && (
+              <ChannelsTab server={server} isOwner={isOwner} onRefresh={refreshServer} />
             )}
             {tab === 'invites' && (
               <InvitesTab server={server} />
@@ -384,6 +388,112 @@ function PermissionsEditor({ permissions, onToggle }) {
           </label>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── Channels Tab ─────────────────────────────────────────────────────────────
+function ChannelsTab({ server, isOwner, onRefresh }) {
+  const [channels, setChannels] = useState(server?.channels ?? [])
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const startEdit = (ch) => {
+    setEditingId(ch.id)
+    setEditName(ch.name)
+    setError('')
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditName(''); setError('') }
+
+  const saveEdit = async (channelId) => {
+    if (!editName.trim()) return
+    setSaving(true); setError('')
+    try {
+      await api.renameChannel(channelId, editName.trim())
+      setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, name: editName.trim() } : ch))
+      setEditingId(null)
+      onRefresh?.()
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (channelId, channelName) => {
+    if (!window.confirm(`Delete #${channelName}? This will remove all messages in this channel.`)) return
+    setSaving(true); setError('')
+    try {
+      await api.deleteChannel(channelId)
+      setChannels(prev => prev.filter(ch => ch.id !== channelId))
+      onRefresh?.()
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
+  }
+
+  const textChannels = channels.filter(ch => ch.type === 'text')
+  const voiceChannels = channels.filter(ch => ch.type === 'voice')
+
+  return (
+    <div className="px-6 py-5">
+      {error && <ErrBanner msg={error} onDismiss={() => setError('')} />}
+
+      {[{ label: 'Text Channels', list: textChannels, Icon: Hash }, { label: 'Voice Channels', list: voiceChannels, Icon: Volume2 }].map(({ label, list, Icon }) => (
+        list.length > 0 && (
+          <div key={label} className="mb-5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-2">{label}</div>
+            <div className="space-y-1.5">
+              {list.map(ch => (
+                <div key={ch.id}>
+                  <div className={clsx(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors',
+                    editingId === ch.id ? 'bg-[#FFF5F5] border-[#FECDD3]' : 'bg-[#F7F8FA] border-[#E3E5E8] hover:bg-[#F2F3F5]'
+                  )}>
+                    <Icon size={14} className="text-[#96989D] shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-[#1A1B1E] truncate">{ch.name}</span>
+                    {isOwner && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => editingId === ch.id ? cancelEdit() : startEdit(ch)}
+                          className="w-7 h-7 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors">
+                          <Edit3 size={12} />
+                        </button>
+                        <button onClick={() => handleDelete(ch.id, ch.name)} disabled={saving}
+                          className="w-7 h-7 rounded-lg hover:bg-red-50 flex items-center justify-center text-[#96989D] hover:text-[#E53935] transition-colors disabled:opacity-40">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {editingId === ch.id && (
+                    <div className="bg-[#FFF5F5] border border-[#FECDD3] rounded-xl p-3 mt-1 flex items-center gap-2">
+                      <input
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveEdit(ch.id); if (e.key === 'Escape') cancelEdit() }}
+                        autoFocus
+                        className="flex-1 bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935]"
+                      />
+                      <button onClick={() => saveEdit(ch.id)} disabled={saving || !editName.trim()}
+                        className="bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors shrink-0">
+                        {saving ? '…' : 'Save'}
+                      </button>
+                      <button onClick={cancelEdit} className="text-[#5C6068] text-xs font-medium shrink-0">Cancel</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      ))}
+
+      {channels.length === 0 && (
+        <p className="text-center text-[#96989D] text-sm py-8">No channels yet.</p>
+      )}
+
+      {!isOwner && (
+        <p className="text-xs text-[#96989D] text-center mt-2">Only the server owner can rename or delete channels.</p>
+      )}
     </div>
   )
 }

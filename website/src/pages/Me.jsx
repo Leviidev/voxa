@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun, Check, Type, MessageSquare } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun, Check, Type, MessageSquare, Send, EyeOff, Eye } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
@@ -9,17 +9,24 @@ import { useTheme } from '../context/ThemeContext.jsx'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
-const friendTabs = ['Online', 'All', 'Add Friend']
 
 export default function Me() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState('Online')
   const [showSettings, setShowSettings] = useState(searchParams.get('settings') === '1')
   const [showEditProfile, setShowEditProfile] = useState(false)
+  const [dms, setDms] = useState(null)
   const handleLogout = () => { logout(); navigate('/') }
+
+  useEffect(() => {
+    api.getDms().then(setDms).catch(() => setDms([]))
+  }, [])
+
   if (showSettings) return <SettingsPanel user={user} onClose={() => { setShowSettings(false); navigate('/voxa/me', { replace: true }) }} onLogout={handleLogout} onEditProfile={() => { setShowSettings(false); setShowEditProfile(true) }} />
+
+  const color = user?.avatarColor ?? avatarColor(user?.username)
+
   return (
     <div className="flex-1 flex overflow-hidden bg-white">
       {showEditProfile && <ProfileEditModal onClose={() => setShowEditProfile(false)} />}
@@ -28,19 +35,8 @@ export default function Me() {
           <VerifyBanner onSettings={() => setShowSettings(true)} />
         )}
         <div className="h-12 px-4 flex items-center gap-3 border-b border-[#E3E5E8] shrink-0 bg-white">
-          <Users size={17} className="text-[#96989D]" />
-          <span className="font-bold text-[#1A1B1E] text-sm">Friends</span>
-          <div className="w-px h-4 bg-[#E3E5E8] mx-1" />
-          <div className="flex items-center gap-1">
-            {friendTabs.map(t => (
-              <button key={t} onClick={() => setActiveTab(t)}
-                className={clsx('px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                  activeTab === t ? 'bg-[#E0E2E6] text-[#1A1B1E]' : 'text-[#5C6068] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]',
-                  t === 'Add Friend' && activeTab !== t && 'text-[#23a55a]')}>
-                {t}
-              </button>
-            ))}
-          </div>
+          <MessageSquare size={16} className="text-[#96989D]" />
+          <span className="font-bold text-[#1A1B1E] text-sm">Direct Messages</span>
           <div className="flex-1" />
           <button onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 text-[#5C6068] hover:text-[#1A1B1E] text-xs font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-[#F2F3F5]">
@@ -48,26 +44,141 @@ export default function Me() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto scrollable">
-          {activeTab === 'Add Friend' ? <AddFriend /> : <EmptyFriends tab={activeTab} />}
+          <DmHome dms={dms} navigate={navigate} user={user} />
         </div>
       </div>
-      <div className="w-80 border-l border-[#E3E5E8] hidden xl:flex flex-col overflow-y-auto scrollable">
-        <div className="p-5 border-b border-[#E3E5E8]">
-          <h3 className="font-bold text-[#1A1B1E] text-sm mb-4">Active Now</h3>
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#F2F3F5] flex items-center justify-center border border-[#E3E5E8]">
-              <Users size={22} className="text-[#96989D]" />
-            </div>
-            <p className="text-[#1A1B1E] font-bold text-sm">It's quiet for now</p>
-            <p className="text-[#96989D] text-xs max-w-[180px] leading-relaxed">When a friend is active, you'll see it here.</p>
-          </div>
-        </div>
+
+      {/* Right panel — profile card */}
+      <div className="w-72 border-l border-[#E3E5E8] hidden xl:flex flex-col overflow-y-auto scrollable p-5 gap-5">
+        <ProfileCard user={user} onEdit={() => setShowEditProfile(true)} />
       </div>
     </div>
   )
 }
 
-function ProfileCard({ user }) {
+function DmHome({ dms, navigate, user }) {
+  const [showNew, setShowNew] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [newError, setNewError] = useState('')
+  const [newLoading, setNewLoading] = useState(false)
+
+  const openNewDm = async (e) => {
+    e.preventDefault()
+    const name = newUsername.trim()
+    if (!name) return
+    setNewLoading(true); setNewError('')
+    try {
+      const dm = await api.openDm(undefined, name)
+      navigate(`/voxa/me/dms/${dm.id}`)
+    } catch (err) {
+      setNewError(err.message)
+    } finally { setNewLoading(false) }
+  }
+
+  const DMCOLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
+  const dmColor = (name) => DMCOLORS[(name?.charCodeAt(0) ?? 0) % DMCOLORS.length]
+
+  if (dms === null) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto w-full p-6">
+      {/* New DM button */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-base font-black text-[#1A1B1E]">Messages</h2>
+          <p className="text-xs text-[#96989D] mt-0.5">Start a conversation with anyone on Voxa</p>
+        </div>
+        <button onClick={() => setShowNew(v => !v)}
+          className="flex items-center gap-1.5 bg-[#E53935] hover:bg-[#C62828] text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors">
+          <Send size={13} /> New Message
+        </button>
+      </div>
+
+      {/* New DM form */}
+      {showNew && (
+        <form onSubmit={openNewDm} className="mb-5 bg-[#FFF5F5] border border-[#FECDD3] rounded-2xl p-4 space-y-3">
+          <div className="text-xs font-bold text-[#1A1B1E] uppercase tracking-wider">Start a conversation</div>
+          <input
+            value={newUsername}
+            onChange={e => { setNewUsername(e.target.value); setNewError('') }}
+            placeholder="Enter a username (e.g. alice)"
+            autoFocus
+            className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+          />
+          {newError && <p className="text-[#E53935] text-xs">{newError}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={newLoading || !newUsername.trim()}
+              className="bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-xs transition-colors">
+              {newLoading ? 'Opening…' : 'Open DM'}
+            </button>
+            <button type="button" onClick={() => { setShowNew(false); setNewError(''); setNewUsername('') }}
+              className="text-[#5C6068] hover:text-[#1A1B1E] text-xs font-medium transition-colors px-2">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* DM list */}
+      {dms.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#F2F3F5] flex items-center justify-center border border-[#E3E5E8]">
+            <MessageSquare size={28} className="text-[#96989D]" />
+          </div>
+          <div>
+            <p className="text-[#1A1B1E] font-bold text-sm mb-1">No messages yet</p>
+            <p className="text-[#96989D] text-xs max-w-[220px] leading-relaxed">Send a message to start a private conversation with someone.</p>
+          </div>
+          <button onClick={() => setShowNew(true)}
+            className="bg-[#E53935] hover:bg-[#C62828] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors">
+            Start a conversation
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-3">Recent Conversations</div>
+          {dms.map(dm => {
+            const other = dm.participants?.find(p => p.id !== user?.id) ?? dm.participants?.[0]
+            const name = other?.displayName ?? other?.username ?? 'Unknown'
+            const bg = other?.avatarColor ?? dmColor(other?.username)
+            const lastMsg = dm.lastMessage
+            return (
+              <button key={dm.id} onClick={() => navigate(`/voxa/me/dms/${dm.id}`)}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-[#F7F8FA] transition-colors text-left group">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0 overflow-hidden"
+                  style={{ background: other?.avatarUrl ? undefined : bg }}>
+                  {other?.avatarUrl
+                    ? <img src={other.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    : name[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-[#1A1B1E] text-sm truncate">{name}</span>
+                    <span className="text-[#96989D] text-xs truncate">@{other?.username}</span>
+                  </div>
+                  {lastMsg && (
+                    <div className="text-xs text-[#96989D] truncate mt-0.5">{lastMsg.content}</div>
+                  )}
+                </div>
+                <div className="shrink-0 text-[#96989D] group-hover:text-[#5C6068] transition-colors">
+                  <ArrowLeft size={13} className="rotate-180" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProfileCard({ user, onEdit }) {
   const color = user?.avatarColor ?? avatarColor(user?.username)
   const bannerBg = user?.bannerColor ?? color
   return (
@@ -76,11 +187,19 @@ function ProfileCard({ user }) {
         {user?.bannerUrl && <img src={user.bannerUrl} alt="banner" className="w-full h-full object-cover" />}
       </div>
       <div className="px-4 pb-4 bg-white -mt-6">
-        <div className="w-14 h-14 rounded-full border-4 border-white flex items-center justify-center font-black text-white text-2xl overflow-hidden"
-          style={{ background: user?.avatarUrl ? undefined : color }}>
-          {user?.avatarUrl
-            ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-            : (user?.displayName ?? user?.username)?.[0]?.toUpperCase()}
+        <div className="flex items-end justify-between">
+          <div className="w-14 h-14 rounded-full border-4 border-white flex items-center justify-center font-black text-white text-2xl overflow-hidden"
+            style={{ background: user?.avatarUrl ? undefined : color }}>
+            {user?.avatarUrl
+              ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+              : (user?.displayName ?? user?.username)?.[0]?.toUpperCase()}
+          </div>
+          {onEdit && (
+            <button onClick={onEdit}
+              className="mb-1 text-xs font-semibold text-white bg-[#E53935] hover:bg-[#C62828] px-3 py-1.5 rounded-xl transition-colors">
+              Edit
+            </button>
+          )}
         </div>
         <div className="mt-2">
           <div className="font-bold text-[#1A1B1E] text-sm">{user?.displayName ?? user?.username}</div>
@@ -338,7 +457,113 @@ function AccountSettings({ user, onEditProfile }) {
         <div className="h-px bg-[#E3E5E8] flex-1" />
       </div>
 
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[#96989D]">Password</span>
+        <div className="h-px bg-[#E3E5E8] flex-1" />
+      </div>
+
+      <ChangePasswordSection />
+
       <LoginHistorySection />
+    </div>
+  )
+}
+
+// ─── Change Password ───────────────────────────────────────────────────────────
+
+function ChangePasswordSection() {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' })
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNext, setShowNext] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handle = (k, v) => { setForm(f => ({ ...f, [k]: v })); setError('') }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (form.next !== form.confirm) { setError('New passwords do not match'); return }
+    if (form.next.length < 6) { setError('New password must be at least 6 characters'); return }
+    setLoading(true); setError('')
+    try {
+      await api.changePassword(form.current, form.next)
+      setSuccess(true)
+      setForm({ current: '', next: '', confirm: '' })
+      setOpen(false)
+      setTimeout(() => setSuccess(false), 4000)
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl overflow-hidden">
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#EAEBEE] flex items-center justify-center shrink-0">
+            <Lock size={14} className="text-[#5C6068]" />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-0.5">Password</div>
+            <div className="text-sm font-medium text-[#1A1B1E]">••••••••••••</div>
+          </div>
+        </div>
+        <button onClick={() => { setOpen(v => !v); setError('') }}
+          className="text-xs font-semibold text-[#E53935] hover:text-[#C62828] transition-colors">
+          {open ? 'Cancel' : 'Change'}
+        </button>
+      </div>
+
+      {success && (
+        <div className="mx-4 mb-4 flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-xs px-3 py-2.5 rounded-xl">
+          <Check size={13} className="shrink-0" /> Password changed successfully.
+        </div>
+      )}
+
+      {open && (
+        <form onSubmit={submit} className="border-t border-[#E3E5E8] px-4 pb-4 pt-4 space-y-3">
+          <div className="relative">
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Current Password</label>
+            <input type={showCurrent ? 'text' : 'password'} value={form.current}
+              onChange={e => handle('current', e.target.value)} required autoComplete="current-password"
+              className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+            />
+            <button type="button" onClick={() => setShowCurrent(v => !v)}
+              className="absolute right-3 top-8 text-[#96989D] hover:text-[#5C6068] transition-colors">
+              {showCurrent ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <div className="relative">
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">New Password</label>
+            <input type={showNext ? 'text' : 'password'} value={form.next}
+              onChange={e => handle('next', e.target.value)} required autoComplete="new-password"
+              className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 pr-10 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+            />
+            <button type="button" onClick={() => setShowNext(v => !v)}
+              className="absolute right-3 top-8 text-[#96989D] hover:text-[#5C6068] transition-colors">
+              {showNext ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Confirm New Password</label>
+            <input type="password" value={form.confirm}
+              onChange={e => handle('confirm', e.target.value)} required autoComplete="new-password"
+              className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+            />
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2.5 rounded-xl">
+              <AlertTriangle size={12} className="shrink-0" />{error}
+            </div>
+          )}
+          <button type="submit" disabled={loading || !form.current || !form.next || !form.confirm}
+            className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
+            {loading ? 'Updating…' : 'Update Password'}
+          </button>
+        </form>
+      )}
     </div>
   )
 }

@@ -34,7 +34,7 @@ export default function ChannelSidebar() {
               <button
                 onClick={() => setShowServerSettings(true)}
                 title="Server Settings"
-                className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-all shrink-0 ml-1"
+                className="w-6 h-6 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors shrink-0 ml-1"
               >
                 <Settings size={13} />
               </button>
