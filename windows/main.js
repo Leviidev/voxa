@@ -385,13 +385,8 @@ function createWindow() {
     minWidth: 940,
     minHeight: 600,
     title: 'Voxa',
-    backgroundColor: '#0B0B0C',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#111113',
-      symbolColor: '#ffffff',
-      height: 36,
-    },
+    backgroundColor: '#111214',
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

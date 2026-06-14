@@ -1189,6 +1189,20 @@ export async function updateGameActivity(userId, game) {
 
 // ─── Releases ────────────────────────────────────────────────────────────────
 
+pool.query(`
+  CREATE TABLE IF NOT EXISTS releases (
+    id SERIAL PRIMARY KEY,
+    platform TEXT NOT NULL DEFAULT 'windows',
+    filename TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    size_bytes BIGINT,
+    version TEXT,
+    notes TEXT,
+    uploaded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    uploaded_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(err => console.error('releases table init failed:', err.message))
+
 export async function createRelease({ platform, filename, sha256, sizeBytes, version, notes, uploadedBy }) {
   const { rows } = await pool.query(
     `INSERT INTO releases (platform, filename, sha256, size_bytes, version, notes, uploaded_by)
