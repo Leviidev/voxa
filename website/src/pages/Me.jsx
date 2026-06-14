@@ -147,30 +147,36 @@ function SettingsPanel({ user, onClose, onLogout, onEditProfile }) {
   const [section, setSection] = useState('account')
   const current = settingsSections.find(s => s.id === section)
   return (
-    <div className="flex-1 flex overflow-hidden bg-white">
-      {/* Sidebar */}
-      <div className="w-56 bg-[#F7F8FA] border-r border-[#E3E5E8] overflow-y-auto scrollable py-4 px-2 shrink-0">
-        <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] px-2 mb-2">User Settings</div>
-        {settingsSections.map(s => (
-          <button key={s.id}
-            onClick={() => s.id === 'profile' ? onEditProfile() : setSection(s.id)}
-            className={clsx('w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors text-left',
-              section === s.id && s.id !== 'profile'
-                ? 'bg-[#E0E2E6] text-[#1A1B1E]'
-                : 'text-[#5C6068] hover:bg-[#EAEBEE] hover:text-[#1A1B1E]')}>
-            <s.icon size={15} />{s.label}
+    <div className="flex-1 flex overflow-hidden bg-[#F7F8FA]">
+      {/* Sidebar — matches ServerSidebar dark style */}
+      <div className="m-2 w-[210px] bg-[#111214] rounded-2xl shadow-2xl shrink-0 flex flex-col overflow-hidden border border-white/[0.05]">
+        <div className="px-3 pt-4 pb-2">
+          <div className="text-[9px] font-bold uppercase tracking-widest text-white/30 px-2 mb-3">User Settings</div>
+          {settingsSections.map(s => (
+            <button key={s.id}
+              onClick={() => s.id === 'profile' ? onEditProfile() : setSection(s.id)}
+              className={clsx(
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all text-left mb-0.5',
+                section === s.id && s.id !== 'profile'
+                  ? 'bg-white/[0.08] text-white'
+                  : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
+              )}>
+              <s.icon size={14} className="shrink-0" />
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="mx-3 h-px bg-white/[0.06]" />
+        <div className="px-3 py-2">
+          <button onClick={onLogout}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-all text-left text-[#E53935]/80 hover:text-[#E53935] hover:bg-white/[0.05]">
+            <LogOut size={14} className="shrink-0" /> Log Out
           </button>
-        ))}
-        <div className="h-px bg-[#E3E5E8] my-3 mx-2" />
-        <button onClick={onLogout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
-          style={{ color: 'var(--accent)' }}>
-          <LogOut size={15} /> Log Out
-        </button>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto scrollable">
+      <div className="flex-1 overflow-y-auto scrollable bg-white rounded-2xl m-2 ml-0 border border-[#E3E5E8]">
         <div className="max-w-2xl mx-auto px-8 py-8">
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-xl font-black text-[#1A1B1E]">{current?.label ?? section}</h1>

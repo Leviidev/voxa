@@ -15,6 +15,14 @@ if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true })
 
 const ADMIN_SECRET = () => (process.env.JWT_SECRET || 'voxa_dev_secret_change_in_prod') + '_admin'
 
+const PLATFORM_FILES = {
+  windows: { filename: 'windows_x64.exe', exts: ['.exe'] },
+  ios:     { filename: 'voxa.ipa',         exts: ['.ipa'] },
+  macos:   { filename: 'voxa.dmg',         exts: ['.dmg', '.pkg'] },
+  linux:   { filename: 'voxa.AppImage',    exts: ['.appimage', '.deb', '.tar.gz'] },
+  android: { filename: 'voxa.apk',         exts: ['.apk', '.aab'] },
+}
+
 function requireAdminToken(req, res, next) {
   const auth = req.headers.authorization
   if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Admin token required' })
@@ -29,17 +37,23 @@ function requireAdminToken(req, res, next) {
 
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
-  filename: (_req, _file, cb) => cb(null, 'windows_x64.exe'),
+  filename: (req, file, cb) => {
+    const platform = req.body?.platform || req.query?.platform || 'windows'
+    const cfg = PLATFORM_FILES[platform] || PLATFORM_FILES.windows
+    cb(null, cfg.filename)
+  },
 })
 
 const upload = multer({
   storage,
   limits: { fileSize: 600 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.originalname.toLowerCase().endsWith('.exe') || file.mimetype === 'application/octet-stream') {
-      return cb(null, true)
-    }
-    cb(new Error('Only .exe files are accepted'))
+  fileFilter: (req, file, cb) => {
+    const platform = req.body?.platform || req.query?.platform || 'windows'
+    const cfg = PLATFORM_FILES[platform] || PLATFORM_FILES.windows
+    const nameLower = file.originalname.toLowerCase()
+    const allowed = cfg.exts.some(ext => nameLower.endsWith(ext))
+    if (allowed || file.mimetype === 'application/octet-stream') return cb(null, true)
+    cb(new Error(`File type not accepted for platform ${platform}`))
   },
 })
 
@@ -55,18 +69,14 @@ async function sha256File(filePath) {
 
 const router = Router()
 
-// ── Auth (no token required) ──────────────────────────────────────────────────
 router.post('/auth', async (req, res) => {
   try {
     const { password } = req.body
     if (!password) return res.status(400).json({ error: 'Password required' })
-
     const hash = process.env.ADMIN_PASSWORD_HASH
     if (!hash) return res.status(503).json({ error: 'Admin not configured' })
-
     const match = await bcrypt.compare(password, hash)
     if (!match) return res.status(401).json({ error: 'Incorrect password' })
-
     const token = jwt.sign({ admin: true }, ADMIN_SECRET(), { expiresIn: '8h' })
     res.json({ token })
   } catch (err) {
@@ -74,12 +84,9 @@ router.post('/auth', async (req, res) => {
   }
 })
 
-// ── Protected routes ──────────────────────────────────────────────────────────
 router.use(requireAdminToken)
 
-router.get('/status', (_req, res) => {
-  res.json({ admin: true })
-})
+router.get('/status', (_req, res) => res.json({ admin: true }))
 
 router.get('/stats', async (_req, res) => {
   try {
@@ -97,9 +104,11 @@ router.get('/stats', async (_req, res) => {
   }
 })
 
-router.get('/releases', async (_req, res) => {
+router.get('/releases', async (req, res) => {
   try {
-    const history = await getReleaseHistory('windows', 20)
+    const platform = req.query.platform || 'windows'
+    const cfg = PLATFORM_FILES[platform] || PLATFORM_FILES.windows
+    const history = await getReleaseHistory(platform, 20)
     res.json(history.map(r => ({
       id: r.id,
       platform: r.platform,
@@ -110,7 +119,7 @@ router.get('/releases', async (_req, res) => {
       notes: r.notes,
       uploadedAt: r.uploaded_at,
       uploaderName: r.uploader_name ?? null,
-      url: `/releases/windows/windows_x64.exe`,
+      url: `/releases/${platform}/${cfg.filename}`,
     })))
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -120,14 +129,17 @@ router.get('/releases', async (_req, res) => {
 router.post('/releases/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+    const platform = req.body?.platform || 'windows'
+    if (!PLATFORM_FILES[platform]) return res.status(400).json({ error: 'Invalid platform' })
+    const cfg = PLATFORM_FILES[platform]
 
     const filePath = req.file.path
     const sha256 = await sha256File(filePath)
     const { version, notes } = req.body
 
     const release = await createRelease({
-      platform: 'windows',
-      filename: 'windows_x64.exe',
+      platform,
+      filename: cfg.filename,
       sha256,
       sizeBytes: req.file.size,
       version: version?.trim() || null,
@@ -140,8 +152,9 @@ router.post('/releases/upload', upload.single('file'), async (req, res) => {
       sha256,
       version: release.version,
       sizeBytes: req.file.size,
-      url: `/releases/windows/windows_x64.exe`,
+      url: `/releases/${platform}/${cfg.filename}`,
       uploadedAt: release.uploaded_at,
+      platform,
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

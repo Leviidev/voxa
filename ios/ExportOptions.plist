@@ -3,9 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>ad-hoc</string>
-    <key>teamID</key>
-    <string>REPLACE_TEAM_ID</string>
+    <string>development</string>
     <key>compileBitcode</key>
     <false/>
     <key>stripSwiftSymbols</key>
@@ -13,11 +11,8 @@
     <key>thinning</key>
     <string>&lt;none&gt;</string>
     <key>signingStyle</key>
-    <string>manual</string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>lol.voxa.app</key>
-        <string>voxa</string>
-    </dict>
+    <string>automatic</string>
+    <key>signingCertificate</key>
+    <string>-</string>
 </dict>
 </plist>
