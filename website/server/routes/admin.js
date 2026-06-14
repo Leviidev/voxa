@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 import multer from 'multer'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { createRelease, getReleaseHistory } from '../db.js'
+import { createRelease, getReleaseHistory, getAdminStats } from '../db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '../../uploads/releases')
@@ -79,6 +79,22 @@ router.use(requireAdminToken)
 
 router.get('/status', (_req, res) => {
   res.json({ admin: true })
+})
+
+router.get('/stats', async (_req, res) => {
+  try {
+    const stats = await getAdminStats()
+    res.json({
+      totalUsers: stats.total_users,
+      totalMessages: stats.total_messages,
+      totalServers: stats.total_servers,
+      activeGames: stats.active_games,
+      newUsers24h: stats.new_users_24h,
+      messages24h: stats.messages_24h,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
 router.get('/releases', async (_req, res) => {

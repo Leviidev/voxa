@@ -1217,3 +1217,18 @@ export async function getReleaseHistory(platform = 'windows', limit = 10) {
   )
   return rows
 }
+
+// ─── Admin Stats ──────────────────────────────────────────────────────────────
+
+export async function getAdminStats() {
+  const { rows } = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM users)::int AS total_users,
+      (SELECT COUNT(*) FROM messages)::int AS total_messages,
+      (SELECT COUNT(*) FROM servers)::int AS total_servers,
+      (SELECT COUNT(*) FROM users WHERE game_activity IS NOT NULL)::int AS active_games,
+      (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '24 hours')::int AS new_users_24h,
+      (SELECT COUNT(*) FROM messages WHERE timestamp > NOW() - INTERVAL '24 hours')::int AS messages_24h
+  `)
+  return rows[0]
+}

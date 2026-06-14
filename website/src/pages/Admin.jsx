@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Upload, CheckCircle2, AlertCircle, Clock, HardDrive, Hash, ExternalLink, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { Upload, CheckCircle2, AlertCircle, Clock, HardDrive, Hash, ExternalLink, ChevronDown, ChevronUp, Lock, Users, MessageSquare, Server, Gamepad2, TrendingUp } from 'lucide-react'
 
 function fmtBytes(n) {
   if (!n) return '—'
@@ -96,6 +96,7 @@ function PasswordGate({ onUnlock }) {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 function Dashboard({ onLock }) {
+  const [stats, setStats] = useState(null)
   const [releases, setReleases] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -109,7 +110,14 @@ function Dashboard({ onLock }) {
   const [showHistory, setShowHistory] = useState(false)
   const fileRef = useRef(null)
 
-  useEffect(() => { fetchReleases() }, [])
+  useEffect(() => { fetchReleases(); fetchStats() }, [])
+
+  const fetchStats = async () => {
+    try {
+      const res = await adminFetch('/api/admin/stats')
+      if (res.ok) setStats(await res.json())
+    } catch { }
+  }
 
   const fetchReleases = async () => {
     setLoading(true)
@@ -178,6 +186,27 @@ function Dashboard({ onLock }) {
             <Lock size={11} /> Lock
           </button>
         </div>
+
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: 'Total Users', value: stats.totalUsers?.toLocaleString(), sub: `+${stats.newUsers24h} today`, icon: Users },
+              { label: 'Messages', value: stats.totalMessages?.toLocaleString(), sub: `+${stats.messages24h} today`, icon: MessageSquare },
+              { label: 'Servers', value: stats.totalServers?.toLocaleString(), sub: null, icon: Server },
+              { label: 'Playing Now', value: stats.activeGames?.toLocaleString(), sub: 'active game status', icon: Gamepad2 },
+            ].map(({ label, value, sub, icon: Icon }) => (
+              <div key={label} className="bg-white rounded-2xl border border-[#E3E5E8] p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#96989D]">{label}</span>
+                  <Icon size={12} className="text-[#96989D]" />
+                </div>
+                <p className="text-2xl font-black text-[#1A1B1E] leading-none">{value ?? '—'}</p>
+                {sub && <p className="text-[10px] text-[#96989D] mt-1 flex items-center gap-1"><TrendingUp size={9} />{sub}</p>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Current release */}
         <div className="bg-white rounded-2xl border border-[#E3E5E8] p-5 mb-4 shadow-sm">
