@@ -23,7 +23,10 @@ class AuthViewModel: ObservableObject {
         self.token = token
         self.user = user
         self.isLoggedIn = true
-        Task { await APIClient.shared.setToken(token) }
+        Task {
+            await APIClient.shared.setToken(token)
+            SocketClient.shared.connect(token: token)
+        }
     }
 
     func login(email: String, password: String) async {
@@ -56,14 +59,30 @@ class AuthViewModel: ObservableObject {
         isLoggedIn = false
         UserDefaults.standard.removeObject(forKey: tokenKey)
         UserDefaults.standard.removeObject(forKey: userKey)
-        Task { await APIClient.shared.setToken(nil) }
+        Task {
+            await APIClient.shared.setToken(nil)
+            SocketClient.shared.disconnect()
+        }
+    }
+
+    func refreshUser() async {
+        do {
+            let updated = try await APIClient.shared.me()
+            user = updated
+            if let data = try? JSONEncoder().encode(updated) {
+                UserDefaults.standard.set(data, forKey: userKey)
+            }
+        } catch {}
     }
 
     private func store(_ resp: AuthResponse) {
         token = resp.token
         user = resp.user
         isLoggedIn = true
-        Task { await APIClient.shared.setToken(resp.token) }
+        Task {
+            await APIClient.shared.setToken(resp.token)
+            SocketClient.shared.connect(token: resp.token)
+        }
         if let data = try? JSONEncoder().encode(resp.user) {
             UserDefaults.standard.set(data, forKey: userKey)
             UserDefaults.standard.set(resp.token, forKey: tokenKey)

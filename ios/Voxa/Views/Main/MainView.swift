@@ -3,6 +3,7 @@ import SwiftUI
 struct MainView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var servers: ServersViewModel
+    @EnvironmentObject var dms: DMViewModel
 
     var body: some View {
         Group {
@@ -38,6 +39,8 @@ struct MainView: View {
                 } else {
                     VoiceChannelView(channel: channel)
                 }
+            } else if let selected = dms.selectedChannel {
+                DMChatView(channel: selected)
             } else {
                 EmptyChatView()
             }
@@ -54,14 +57,6 @@ struct MainView: View {
                 iPhoneServerList
                     .navigationTitle("Servers")
                     .navigationBarTitleDisplayMode(.large)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button(action: {}) {
-                                Image(systemName: "plus")
-                                    .foregroundColor(Color(hex: "E53935"))
-                            }
-                        }
-                    }
             }
             .tabItem { Label("Servers", systemImage: "bubble.left.and.bubble.right.fill") }
 

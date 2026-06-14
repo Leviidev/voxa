@@ -214,6 +214,65 @@ struct ReactionData: Codable {
     var userIds: [String]
 }
 
+// MARK: - DM
+
+struct DMChannel: Codable, Identifiable {
+    let id: String
+    var other: DMParticipant?
+    var lastMessage: DMMessage?
+
+    var displayName: String { other?.effectiveName ?? "Unknown User" }
+}
+
+struct DMParticipant: Codable, Identifiable {
+    let id: String
+    var username: String
+    var displayName: String?
+    var discriminator: String
+    var avatarUrl: String?
+    var avatarColor: String?
+    var status: String?
+    var customStatus: String?
+    var bio: String?
+
+    var effectiveName: String { displayName ?? username }
+    var statusEnum: UserStatus { UserStatus(rawValue: status ?? "offline") ?? .offline }
+
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex.replacingOccurrences(of: "#", with: "")) }
+        let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
+        return colors[abs(username.hashValue) % colors.count]
+    }
+}
+
+struct DMMessage: Codable, Identifiable {
+    let id: String
+    var dmChannelId: String
+    var authorId: String
+    var author: String
+    var displayName: String?
+    var avatarUrl: String?
+    var avatarColor: String?
+    var content: String
+    var edited: Bool
+    var editedAt: Date?
+    var timestamp: Date
+
+    var effectiveName: String { displayName ?? author }
+
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex.replacingOccurrences(of: "#", with: "")) }
+        let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
+        return colors[abs(author.hashValue) % colors.count]
+    }
+
+    var shortTime: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: timestamp)
+    }
+}
+
 // MARK: - Auth
 
 struct AuthResponse: Codable {
@@ -252,4 +311,3 @@ extension Color {
         self.init(red: r, green: g, blue: b)
     }
 }
-

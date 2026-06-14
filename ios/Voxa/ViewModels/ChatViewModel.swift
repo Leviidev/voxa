@@ -7,15 +7,16 @@ class ChatViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isSending = false
     @Published var error: String?
+    @Published var typingUsers: [String] = []  // usernames currently typing
 
     private var currentChannelId: String?
     private var pollTask: Task<Void, Never>?
     private let storageKey = "voxa_msgs_v2_"
+    private let socket = SocketClient.shared
 
     func load(channelId: String, token: String?) async {
         currentChannelId = channelId
         isLoading = true
-
         messages = loadLocal(channelId: channelId)
 
         do {
@@ -27,6 +28,37 @@ class ChatViewModel: ObservableObject {
         }
         isLoading = false
 
+        // Wire up real-time socket callbacks
+        socket.onNewMessage = { [weak self] msg in
+            guard let self, msg.channelId == channelId else { return }
+            self.handleNewMessage(msg)
+        }
+        socket.onMessageEdit = { [weak self] msg in
+            guard let self, msg.channelId == channelId else { return }
+            if let idx = self.messages.firstIndex(where: { $0.id == msg.id }) {
+                self.messages[idx] = msg
+                self.saveLocal(channelId: channelId)
+            }
+        }
+        socket.onMessageDelete = { [weak self] id in
+            guard let self else { return }
+            self.messages.removeAll { $0.id == id }
+            self.saveLocal(channelId: channelId)
+        }
+        socket.onTypingUpdate = { [weak self] cid, _, username, typing in
+            guard let self, cid == channelId else { return }
+            if typing {
+                if !self.typingUsers.contains(username) {
+                    self.typingUsers.append(username)
+                }
+            } else {
+                self.typingUsers.removeAll { $0 == username }
+            }
+        }
+
+        socket.joinChannel(channelId)
+
+        // Fallback poll every 10s in case socket misses anything
         startPolling(channelId: channelId)
     }
 
@@ -57,7 +89,7 @@ class ChatViewModel: ObservableObject {
             }
             saveLocal(channelId: channelId)
         } catch {
-            // Keep optimistic message
+            // Keep optimistic message visible
         }
         isSending = false
     }
@@ -69,8 +101,7 @@ class ChatViewModel: ObservableObject {
         if let cid = currentChannelId { saveLocal(channelId: cid) }
 
         do {
-            let updated = try await APIClient.shared.editMessage(messageId: message.id,
-                                                                  content: newContent)
+            let updated = try await APIClient.shared.editMessage(messageId: message.id, content: newContent)
             if let i = messages.firstIndex(where: { $0.id == message.id }) {
                 messages[i] = updated
             }
@@ -83,13 +114,39 @@ class ChatViewModel: ObservableObject {
         try? await APIClient.shared.deleteMessage(messageId: message.id)
     }
 
-    // MARK: - Polling (every 3s when app is active)
+    func disconnect() {
+        if let cid = currentChannelId {
+            socket.leaveChannel(cid)
+        }
+        pollTask?.cancel()
+        pollTask = nil
+        socket.onNewMessage = nil
+        socket.onMessageEdit = nil
+        socket.onMessageDelete = nil
+        socket.onTypingUpdate = nil
+        currentChannelId = nil
+        typingUsers = []
+    }
+
+    // MARK: - Private helpers
+
+    private func handleNewMessage(_ msg: VoxaMessage) {
+        // Replace matching optimistic message or append
+        if let optIdx = messages.firstIndex(where: {
+            $0.id.hasPrefix("opt_") && $0.content == msg.content && $0.authorId == msg.authorId
+        }) {
+            messages[optIdx] = msg
+        } else if !messages.contains(where: { $0.id == msg.id }) {
+            messages.append(msg)
+        }
+        if let cid = currentChannelId { saveLocal(channelId: cid) }
+    }
 
     private func startPolling(channelId: String) {
         pollTask?.cancel()
         pollTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s fallback
                 guard !Task.isCancelled else { break }
                 do {
                     let fresh = try await APIClient.shared.messages(channelId: channelId, limit: 50)
@@ -111,15 +168,11 @@ class ChatViewModel: ObservableObject {
             }
         }
         merged.removeAll { msg in
-            msg.id.hasPrefix("opt_") && fresh.contains(where: { $0.content == msg.content && $0.authorId == msg.authorId })
+            msg.id.hasPrefix("opt_") &&
+            fresh.contains(where: { $0.content == msg.content && $0.authorId == msg.authorId })
         }
         messages = merged.sorted { $0.timestamp < $1.timestamp }
         saveLocal(channelId: channelId)
-    }
-
-    func disconnect() {
-        pollTask?.cancel()
-        pollTask = nil
     }
 
     // MARK: - Local Persistence

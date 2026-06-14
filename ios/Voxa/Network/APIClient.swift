@@ -5,7 +5,6 @@ import Foundation
 actor APIClient {
     static let shared = APIClient()
 
-    // Base URL — set VOXA_API_URL env var in CI or change to your deployed URL
     private let baseURL: URL
     private var authToken: String?
 
@@ -36,9 +35,7 @@ actor APIClient {
 
     private func perform<T: Decodable>(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> T {
         var bodyData: Data?
-        if let body {
-            bodyData = try JSONEncoder().encode(body)
-        }
+        if let body { bodyData = try JSONEncoder().encode(body) }
         let req = buildRequest(path, method: method, body: bodyData)
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
@@ -46,18 +43,7 @@ actor APIClient {
             let msg = try? JSONDecoder().decode(APIErrorBody.self, from: data)
             throw APIError.httpError(http.statusCode, msg?.error ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode))
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let str = try container.decode(String.self)
-            let isoFull = ISO8601DateFormatter()
-            isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let d = isoFull.date(from: str) { return d }
-            let isoBasic = ISO8601DateFormatter()
-            if let d = isoBasic.date(from: str) { return d }
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Bad date: \(str)"))
-        }
-        return try decoder.decode(T.self, from: data)
+        return try Self.decoder.decode(T.self, from: data)
     }
 
     private func performVoid(_ path: String, method: String, body: Encodable? = nil) async throws {
@@ -69,6 +55,21 @@ actor APIClient {
             throw APIError.invalidResponse
         }
     }
+
+    static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            let isoFull = ISO8601DateFormatter()
+            isoFull.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = isoFull.date(from: str) { return d }
+            let isoBasic = ISO8601DateFormatter()
+            if let d = isoBasic.date(from: str) { return d }
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Bad date: \(str)"))
+        }
+        return d
+    }()
 
     // MARK: - Auth
 
@@ -84,6 +85,12 @@ actor APIClient {
 
     func me() async throws -> User {
         try await perform("/api/auth/me")
+    }
+
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        struct Body: Encodable { let currentPassword: String; let newPassword: String }
+        try await performVoid("/api/auth/change-password", method: "PATCH",
+                              body: Body(currentPassword: currentPassword, newPassword: newPassword))
     }
 
     // MARK: - Servers
@@ -133,8 +140,25 @@ actor APIClient {
 
     // MARK: - Profile
 
-    func updateProfile(fields: [String: String]) async throws -> User {
-        try await perform("/api/users/me", method: "PATCH", body: fields)
+    func updateProfile(displayName: String?, bio: String?, customStatus: String?,
+                       avatarColor: String?, status: String?) async throws -> User {
+        struct Body: Encodable {
+            var displayName: String?
+            var bio: String?
+            var customStatus: String?
+            var avatarColor: String?
+            var status: String?
+        }
+        return try await perform("/api/users/me", method: "PATCH",
+                                 body: Body(displayName: displayName, bio: bio,
+                                            customStatus: customStatus, avatarColor: avatarColor,
+                                            status: status))
+    }
+
+    // MARK: - Users
+
+    func getUser(id: String) async throws -> User {
+        try await perform("/api/users/\(id)")
     }
 
     // MARK: - Invites
@@ -142,6 +166,43 @@ actor APIClient {
     func joinByInvite(code: String) async throws -> VoxaServer {
         struct Empty: Encodable {}
         return try await perform("/api/invites/\(code)/join", method: "POST", body: Empty())
+    }
+
+    // MARK: - DMs
+
+    func dmChannels() async throws -> [DMChannel] {
+        try await perform("/api/dms")
+    }
+
+    func openDm(userId: String? = nil, username: String? = nil) async throws -> DMChannel {
+        struct Body: Encodable { var userId: String?; var username: String? }
+        return try await perform("/api/dms", method: "POST",
+                                 body: Body(userId: userId, username: username))
+    }
+
+    func dmMessages(dmId: String, limit: Int = 50) async throws -> [DMMessage] {
+        try await perform("/api/dms/\(dmId)/messages?limit=\(limit)")
+    }
+
+    func sendDmMessage(dmId: String, content: String) async throws -> DMMessage {
+        struct Body: Encodable { let content: String }
+        return try await perform("/api/dms/\(dmId)/messages", method: "POST",
+                                 body: Body(content: content))
+    }
+
+    func editDmMessage(dmId: String, msgId: String, content: String) async throws -> DMMessage {
+        struct Body: Encodable { let content: String }
+        return try await perform("/api/dms/\(dmId)/messages/\(msgId)", method: "PATCH",
+                                 body: Body(content: content))
+    }
+
+    func deleteDmMessage(dmId: String, msgId: String) async throws {
+        try await performVoid("/api/dms/\(dmId)/messages/\(msgId)", method: "DELETE")
+    }
+
+    func markDmRead(dmId: String) async throws {
+        struct Empty: Encodable {}
+        try await performVoid("/api/dms/\(dmId)/read", method: "POST", body: Empty())
     }
 }
 
@@ -165,57 +226,113 @@ private struct APIErrorBody: Decodable {
     let error: String
 }
 
-// MARK: - WebSocket (Socket.IO compatible)
+// MARK: - Socket.IO v4 Client (Singleton)
 
 @MainActor
 class SocketClient: ObservableObject {
-    private var task: URLSessionWebSocketTask?
+    static let shared = SocketClient()
+
+    // Callbacks
     var onNewMessage: ((VoxaMessage) -> Void)?
     var onMessageEdit: ((VoxaMessage) -> Void)?
     var onMessageDelete: ((String) -> Void)?
-    private var baseURL: URL
-    private var pingTimer: Timer?
+    var onDMMessage: ((DMMessage) -> Void)?
+    var onDMMessageEdit: ((DMMessage) -> Void)?
+    var onDMMessageDelete: ((_ id: String, _ dmChannelId: String) -> Void)?
+    var onTypingUpdate: ((_ channelId: String, _ userId: String, _ username: String, _ typing: Bool) -> Void)?
 
-    init() {
+    private var task: URLSessionWebSocketTask?
+    private var baseURL: URL
+    private var authToken: String?
+    private var namespaceConnected = false
+    private var reconnectTask: Task<Void, Never>?
+
+    private init() {
         let envURL = ProcessInfo.processInfo.environment["VOXA_API_URL"] ?? "https://voxa.lol"
         let wsScheme = envURL.hasPrefix("https") ? "wss" : "ws"
-        let host = envURL.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: "")
+        let host = envURL
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
         self.baseURL = URL(string: "\(wsScheme)://\(host)")!
     }
 
-    func connect(token: String, channelId: String, serverId: String) {
-        disconnect()
-        guard var comps = URLComponents(url: baseURL.appendingPathComponent("/socket.io/"), resolvingAgainstBaseURL: false) else { return }
-        comps.queryItems = [
-            URLQueryItem(name: "token", value: token),
-            URLQueryItem(name: "EIO", value: "4"),
-            URLQueryItem(name: "transport", value: "websocket"),
-        ]
-        guard let url = comps.url else { return }
-        let session = URLSession(configuration: .default)
-        task = session.webSocketTask(with: url)
-        task?.resume()
-        receive()
-
-        // Join channel room after connection
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.emit("joinChannel", data: ["channelId": channelId])
-        }
+    func connect(token: String) {
+        guard authToken != token || task == nil else { return }
+        authToken = token
+        openConnection()
     }
 
     func disconnect() {
-        pingTimer?.invalidate()
-        pingTimer = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        namespaceConnected = false
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
     }
 
-    private func emit(_ event: String, data: [String: String]) {
-        let payload = ["event": event, "data": data] as [String: Any]
-        if let jsonData = try? JSONSerialization.data(withJSONObject: ["42[\"\(event)\",\(String(data: (try? JSONEncoder().encode(data)) ?? Data(), encoding: .utf8) ?? "{}")]"]),
-           let str = String(data: jsonData, encoding: .utf8) {
-            task?.send(.string(str)) { _ in }
-        }
+    // MARK: - Room management
+
+    func joinChannel(_ channelId: String) {
+        emitString("channel:join", value: channelId)
+    }
+
+    func leaveChannel(_ channelId: String) {
+        emitString("channel:leave", value: channelId)
+    }
+
+    func joinServer(_ serverId: String) {
+        emitString("server:join", value: serverId)
+    }
+
+    func joinDM(_ dmId: String) {
+        emitString("dm:join", value: dmId)
+    }
+
+    func leaveDM(_ dmId: String) {
+        emitString("dm:leave", value: dmId)
+    }
+
+    func sendTypingStart(channelId: String, username: String) {
+        emitDict("typing:start", data: ["channelId": channelId, "username": username])
+    }
+
+    func sendTypingStop(channelId: String) {
+        emitDict("typing:stop", data: ["channelId": channelId])
+    }
+
+    // MARK: - Private
+
+    private func openConnection() {
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
+        namespaceConnected = false
+
+        guard var comps = URLComponents(url: baseURL.appendingPathComponent("/socket.io/"),
+                                        resolvingAgainstBaseURL: false) else { return }
+        comps.queryItems = [
+            URLQueryItem(name: "EIO", value: "4"),
+            URLQueryItem(name: "transport", value: "websocket"),
+        ]
+        guard let url = comps.url else { return }
+        task = URLSession.shared.webSocketTask(with: url)
+        task?.resume()
+        receive()
+    }
+
+    private func emitString(_ event: String, value: String) {
+        guard namespaceConnected else { return }
+        let parts: [Any] = [event, value]
+        guard let data = try? JSONSerialization.data(withJSONObject: parts),
+              let str = String(data: data, encoding: .utf8) else { return }
+        task?.send(.string("42\(str)")) { _ in }
+    }
+
+    private func emitDict(_ event: String, data: [String: Any]) {
+        guard namespaceConnected else { return }
+        let parts: [Any] = [event, data]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: parts),
+              let str = String(data: jsonData, encoding: .utf8) else { return }
+        task?.send(.string("42\(str)")) { _ in }
     }
 
     private func receive() {
@@ -224,42 +341,100 @@ class SocketClient: ObservableObject {
             switch result {
             case .success(let msg):
                 if case .string(let text) = msg {
-                    self.handleSocketMessage(text)
+                    Task { @MainActor in self.handle(text) }
                 }
                 self.receive()
             case .failure:
-                break
+                Task { @MainActor in self.scheduleReconnect() }
             }
         }
     }
 
-    private func handleSocketMessage(_ text: String) {
-        guard text.hasPrefix("42[") else { return }
+    private func handle(_ text: String) {
+        if text.hasPrefix("0") {
+            // EIO open — send Socket.IO namespace connect with auth token
+            let auth: [String: Any] = ["token": authToken ?? ""]
+            if let data = try? JSONSerialization.data(withJSONObject: auth),
+               let str = String(data: data, encoding: .utf8) {
+                task?.send(.string("40\(str)")) { _ in }
+            }
+        } else if text == "2" {
+            // Ping — respond pong
+            task?.send(.string("3")) { _ in }
+        } else if text.hasPrefix("40") {
+            // Namespace connected
+            namespaceConnected = true
+        } else if text == "41" {
+            // Namespace disconnected
+            namespaceConnected = false
+            scheduleReconnect()
+        } else if text.hasPrefix("42") {
+            parseEvent(text)
+        }
+    }
+
+    private func parseEvent(_ text: String) {
         let inner = String(text.dropFirst(2))
         guard let data = inner.data(using: .utf8),
               let arr = try? JSONSerialization.jsonObject(with: data) as? [Any],
               arr.count >= 2,
-              let event = arr[0] as? String,
-              let payload = arr[1] as? [String: Any],
-              let jsonData = try? JSONSerialization.data(withJSONObject: payload) else { return }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+              let event = arr[0] as? String else { return }
 
         switch event {
         case "newMessage":
-            if let msg = try? decoder.decode(VoxaMessage.self, from: jsonData) {
-                DispatchQueue.main.async { self.onNewMessage?(msg) }
-            }
+            guard let payload = arr[1] as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: payload),
+                  let msg = try? APIClient.decoder.decode(VoxaMessage.self, from: json) else { return }
+            onNewMessage?(msg)
+
         case "messageEdited":
-            if let msg = try? decoder.decode(VoxaMessage.self, from: jsonData) {
-                DispatchQueue.main.async { self.onMessageEdit?(msg) }
-            }
+            guard let payload = arr[1] as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: payload),
+                  let msg = try? APIClient.decoder.decode(VoxaMessage.self, from: json) else { return }
+            onMessageEdit?(msg)
+
         case "messageDeleted":
-            if let id = payload["id"] as? String {
-                DispatchQueue.main.async { self.onMessageDelete?(id) }
-            }
+            guard let payload = arr[1] as? [String: Any],
+                  let id = payload["id"] as? String else { return }
+            onMessageDelete?(id)
+
+        case "dm:message:new":
+            guard let payload = arr[1] as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: payload),
+                  let msg = try? APIClient.decoder.decode(DMMessage.self, from: json) else { return }
+            onDMMessage?(msg)
+
+        case "dm:message:edit":
+            guard let payload = arr[1] as? [String: Any],
+                  let json = try? JSONSerialization.data(withJSONObject: payload),
+                  let msg = try? APIClient.decoder.decode(DMMessage.self, from: json) else { return }
+            onDMMessageEdit?(msg)
+
+        case "dm:message:delete":
+            guard let payload = arr[1] as? [String: Any],
+                  let id = payload["id"] as? String,
+                  let dmChannelId = payload["dmChannelId"] as? String else { return }
+            onDMMessageDelete?(id, dmChannelId)
+
+        case "typing:update":
+            guard let payload = arr[1] as? [String: Any],
+                  let channelId = payload["channelId"] as? String,
+                  let userId = payload["userId"] as? String,
+                  let typing = payload["typing"] as? Bool else { return }
+            let username = payload["username"] as? String ?? ""
+            onTypingUpdate?(channelId, userId, username, typing)
+
         default: break
+        }
+    }
+
+    private func scheduleReconnect() {
+        guard authToken != nil else { return }
+        reconnectTask?.cancel()
+        reconnectTask = Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            openConnection()
         }
     }
 }
