@@ -1186,3 +1186,34 @@ export async function updateGameActivity(userId, game) {
   const value = (typeof game === 'string' && game.trim()) ? game.trim().slice(0, 100) : null
   await pool.query('UPDATE users SET game_activity = $1 WHERE id = $2', [value, userId])
 }
+
+// ─── Releases ────────────────────────────────────────────────────────────────
+
+export async function createRelease({ platform, filename, sha256, sizeBytes, version, notes, uploadedBy }) {
+  const { rows } = await pool.query(
+    `INSERT INTO releases (platform, filename, sha256, size_bytes, version, notes, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [platform, filename, sha256, sizeBytes ?? null, version ?? null, notes ?? null, uploadedBy ?? null]
+  )
+  return rows[0]
+}
+
+export async function getLatestRelease(platform = 'windows') {
+  const { rows } = await pool.query(
+    `SELECT * FROM releases WHERE platform = $1 ORDER BY uploaded_at DESC LIMIT 1`,
+    [platform]
+  )
+  return rows[0] ?? null
+}
+
+export async function getReleaseHistory(platform = 'windows', limit = 10) {
+  const { rows } = await pool.query(
+    `SELECT r.*, u.username as uploader_name
+     FROM releases r
+     LEFT JOIN users u ON u.id = r.uploaded_by
+     WHERE r.platform = $1
+     ORDER BY r.uploaded_at DESC LIMIT $2`,
+    [platform, limit]
+  )
+  return rows
+}

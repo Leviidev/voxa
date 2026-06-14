@@ -65,6 +65,23 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - System tray: shows current game or "Voxa"; minimize-to-tray on window close
 - Build: `npm run dist` with electron-builder → NSIS installer + portable `.exe` in `windows/dist/`
 - GitHub Actions: `.github/workflows/desktop.yml` — `windows-latest` runner, uploads both artifacts
+- **Custom auto-updater**: no electron-updater; checks `GET /api/releases/windows/latest` on launch (+5s delay) and every 4h; compares SHA-256 with stored state in `app.getPath('userData')/voxa-update-state.json`; downloads to tmp, verifies hash, runs installer with `/S`, quits. First run records current sha256 as baseline so it never self-updates on fresh install.
+
+## Admin Dashboard + Release System
+
+- `releases` table: `id, platform, filename, sha256, size_bytes, version, notes, uploaded_at, uploaded_by TEXT → users.id`
+- Upload files stored at `website/uploads/releases/windows_x64.exe` (always overwrites — only one live build)
+- DB functions: `createRelease()`, `getLatestRelease(platform)`, `getReleaseHistory(platform, limit)` in `db.js`
+- `website/server/routes/admin.js` — protected by `requireAuth` + `requireAdmin` (checks `ADMIN_EMAILS` env var, comma-separated emails)
+  - `GET /api/admin/status` — returns `{ admin: true }` or 403
+  - `GET /api/admin/releases` — release history
+  - `POST /api/admin/releases/upload` — multer diskStorage, computes sha256 server-side, saves to DB
+- `website/server/routes/releases.js` — public, mounted at both `/api/releases` and `/releases`
+  - `GET /api/releases/windows/latest` → `{ sha256, version, url, uploadedAt, sizeBytes }`
+  - `GET /releases/windows/windows_x64.exe` → serves the file (res.download)
+- Frontend admin page: `website/src/pages/Admin.jsx` at route `/admin` (top-level, outside AppLayout)
+  - Drag-and-drop or click-to-upload .exe; XHR with progress bar; shows current sha256, upload date, size; collapsible release history
+- **ADMIN_EMAILS must be set** as environment variable (comma-separated emails of admin users)
 
 ## Game Activity (backend + frontend)
 

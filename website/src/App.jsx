@@ -8,6 +8,7 @@ import InviteJoin from './pages/InviteJoin.jsx'
 import DmChat from './components/DmChat.jsx'
 import ResetPassword from './pages/ResetPassword.jsx'
 import VerifyEmail from './pages/VerifyEmail.jsx'
+import Admin from './pages/Admin.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { ServersProvider } from './context/ServersContext.jsx'
 import { SocketProvider } from './context/SocketContext.jsx'
@@ -31,6 +32,7 @@ function AppWithSocket() {
             <Route path="servers/:serverId" element={<ServerView />} />
             <Route path="servers/:serverId/channels/:channelId" element={<ServerView />} />
           </Route>
+          <Route path="admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ServersProvider>

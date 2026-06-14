@@ -20,6 +20,8 @@ import inviteRoutes from './routes/invites.js'
 import dmRoutes from './routes/dms.js'
 import unreadRoutes from './routes/unread.js'
 import activityRoutes from './routes/activity.js'
+import adminRoutes from './routes/admin.js'
+import releasesRoutes from './routes/releases.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -178,6 +180,9 @@ app.use('/api/auth', authRoutes)
 app.use('/api/auth', securityRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/users', activityRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/releases', releasesRoutes)
+app.use('/releases', releasesRoutes)
 app.use('/api/servers', serverRoutes)
 app.use('/api/channels', channelRoutes)
 app.use('/api/messages', messageRoutes)
