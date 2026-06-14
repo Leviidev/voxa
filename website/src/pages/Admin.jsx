@@ -237,20 +237,24 @@ function GitHubPanel({ onLock }) {
   const [loadingArtifacts, setLoadingArtifacts] = useState({})
   const [importTarget, setImportTarget] = useState(null)
   const [importSuccess, setImportSuccess] = useState(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
-  const load = async () => {
+  const load = async (p = page) => {
     setLoading(true); setError('')
     try {
       const [cfgRes, runsRes] = await Promise.all([
         adminFetch('/api/admin/github/config'),
-        adminFetch('/api/admin/github/runs'),
+        adminFetch(`/api/admin/github/runs?page=${p}`),
       ])
       if (cfgRes.status === 401 || runsRes.status === 401) { onLock(); return }
       const cfgData = await cfgRes.json()
       setConfig(cfgData)
       if (runsRes.ok) {
         const runsData = await runsRes.json()
-        setRuns(Array.isArray(runsData) ? runsData : [])
+        setRuns(Array.isArray(runsData) ? runsData : (runsData.runs || []))
+        setTotalPages(runsData.totalPages || 1)
+        setPage(runsData.page || p)
       } else {
         const errData = await runsRes.json()
         setError(errData.error || 'Failed to load runs')
@@ -259,7 +263,13 @@ function GitHubPanel({ onLock }) {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  const goToPage = (p) => {
+    setExpandedRun(null)
+    setPage(p)
+    load(p)
+  }
+
+  useEffect(() => { load(1) }, [])
 
   const toggleRun = async (runId) => {
     if (expandedRun === runId) { setExpandedRun(null); return }
@@ -354,8 +364,9 @@ function GitHubPanel({ onLock }) {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-[#E3E5E8] shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#E3E5E8]">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-[#96989D]">Recent Workflow Runs</h2>
+          <div className="px-5 py-3 border-b border-[#E3E5E8] flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#96989D]">Workflow Runs</h2>
+            <span className="text-[10px] text-[#96989D]">Page {page} of {totalPages}</span>
           </div>
           <div className="divide-y divide-[#E3E5E8]">
             {runs.map(run => (
@@ -430,6 +441,37 @@ function GitHubPanel({ onLock }) {
               </div>
             ))}
           </div>
+          {totalPages > 1 && (
+            <div className="px-5 py-3 border-t border-[#E3E5E8] flex items-center justify-between">
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1 || loading}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#5C6068] hover:text-[#1A1B1E] disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                ← Previous
+              </button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => goToPage(p)}
+                    disabled={loading}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                      p === page
+                        ? 'bg-[#E53935] text-white'
+                        : 'text-[#96989D] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]'
+                    }`}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages || loading}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#5C6068] hover:text-[#1A1B1E] disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

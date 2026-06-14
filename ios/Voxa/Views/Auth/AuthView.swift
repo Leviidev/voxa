@@ -84,7 +84,7 @@ struct AuthView: View {
                             }
                             GlassInputField("Email", text: $email,
                                             keyboard: .emailAddress, focused: $focused, tag: .email)
-                            GlassPasswordField("Password", text: $password, show: $showPassword)
+                            GlassPasswordField(label: "Password", text: $password, show: $showPassword)
                         }
 
                         // Submit

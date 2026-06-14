@@ -82,12 +82,14 @@ router.get('/config', (_req, res) => {
   })
 })
 
-// GET /api/admin/github/runs — last 10 runs across all workflows
-router.get('/runs', async (_req, res) => {
+// GET /api/admin/github/runs — paginated runs across all workflows
+router.get('/runs', async (req, res) => {
   try {
     const repo = getRepo()
-    const data = await ghFetch(`/repos/${repo}/actions/runs?per_page=20&exclude_pull_requests=true`)
-    const runs = (data.workflow_runs || []).slice(0, 10).map(r => ({
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const perPage = 10
+    const data = await ghFetch(`/repos/${repo}/actions/runs?per_page=${perPage}&page=${page}&exclude_pull_requests=true`)
+    const runs = (data.workflow_runs || []).map(r => ({
       id: r.id,
       name: r.name,
       workflowName: r.name,
@@ -101,7 +103,9 @@ router.get('/runs', async (_req, res) => {
       updatedAt: r.updated_at,
       htmlUrl: r.html_url,
     }))
-    res.json(runs)
+    const totalCount = data.total_count || 0
+    const totalPages = Math.max(1, Math.ceil(totalCount / perPage))
+    res.json({ runs, page, totalPages, totalCount })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

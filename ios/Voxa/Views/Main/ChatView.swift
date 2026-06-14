@@ -252,16 +252,16 @@ struct MessageRow: View {
                     }
                 }
 
-                Text(message.content)
+                (Text(message.content)
                     .font(.system(size: 15))
                     .foregroundColor(Color(hex: "DCDDDE"))
-                    .fixedSize(horizontal: false, vertical: true)
                 +
                 (message.edited
                  ? Text(" (edited)")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: "5C5E66"))
-                 : Text(""))
+                 : Text("")))
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 0)
