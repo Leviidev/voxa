@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Voxa" parent="android:Theme.Material.NoTitleBar">
+    <style name="Theme.Voxa" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">#111214</item>
         <item name="android:navigationBarColor">#111214</item>
