@@ -19,6 +19,7 @@ import userRoutes from './routes/users.js'
 import inviteRoutes from './routes/invites.js'
 import dmRoutes from './routes/dms.js'
 import unreadRoutes from './routes/unread.js'
+import activityRoutes from './routes/activity.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -176,6 +177,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
 app.use('/api/auth', authRoutes)
 app.use('/api/auth', securityRoutes)
 app.use('/api/users', userRoutes)
+app.use('/api/users', activityRoutes)
 app.use('/api/servers', serverRoutes)
 app.use('/api/channels', channelRoutes)
 app.use('/api/messages', messageRoutes)

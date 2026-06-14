@@ -35,6 +35,7 @@ function publicUser(u) {
     bannerUrl: rest.banner_url,
     bannerColor: rest.banner_color,
     status: rest.status,
+    gameActivity: rest.game_activity ?? null,
     createdAt: rest.created_at,
     emailVerified: rest.email_verified ?? false,
     totpEnabled: rest.totp_enabled ?? false,
@@ -1177,4 +1178,11 @@ export async function getLoginHistory(userId, limit = 20) {
     device: r.device,
     createdAt: r.created_at,
   }))
+}
+
+// ─── Game Activity ────────────────────────────────────────────────────────────
+
+export async function updateGameActivity(userId, game) {
+  const value = (typeof game === 'string' && game.trim()) ? game.trim().slice(0, 100) : null
+  await pool.query('UPDATE users SET game_activity = $1 WHERE id = $2', [value, userId])
 }

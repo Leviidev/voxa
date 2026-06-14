@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('voxa_token', data.token)
     localStorage.setItem('voxa_user', JSON.stringify(data.user))
     setUser(data.user)
+    if (window.electronVoxa?.reportToken) window.electronVoxa.reportToken(data.token)
     return data.user
   }
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('voxa_token', token)
     localStorage.setItem('voxa_user', JSON.stringify(user))
     setUser(user)
+    if (window.electronVoxa?.reportToken) window.electronVoxa.reportToken(token)
     return user
   }
 
@@ -47,6 +49,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('voxa_token')
     localStorage.removeItem('voxa_user')
     setUser(null)
+    if (window.electronVoxa?.clearToken) window.electronVoxa.clearToken()
   }
 
   return (

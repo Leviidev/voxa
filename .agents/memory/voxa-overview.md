@@ -56,13 +56,33 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - Message density stored but ChatArea not yet wired to `data-msg-display` attribute (future work)
 - Notification prefs → `voxa_notif_prefs` in localStorage; Privacy prefs → `voxa_privacy_prefs`
 
+## Windows Electron App (windows/)
+
+- Entry: `windows/main.js` (Electron main), `windows/preload.js` (context bridge), `windows/package.json`
+- Loads the Voxa website in a BrowserWindow (`VOXA_URL` env var, defaults to `https://voxa.lol`)
+- Game detection: polls `tasklist /FO CSV /NH` every 10s on Windows, `ps -eo comm` on macOS/Linux; matches against 60+ game `.exe` names in the GAMES array
+- IPC flow: renderer calls `window.electronVoxa.reportToken(token)` on login → main stores JWT → calls `PATCH /api/users/me/activity` when game changes → clears on logout/quit
+- System tray: shows current game or "Voxa"; minimize-to-tray on window close
+- Build: `npm run dist` with electron-builder → NSIS installer + portable `.exe` in `windows/dist/`
+- GitHub Actions: `.github/workflows/desktop.yml` — `windows-latest` runner, uploads both artifacts
+
+## Game Activity (backend + frontend)
+
+- DB column: `users.game_activity TEXT` (nullable)
+- `updateGameActivity(userId, game)` in `db.js`; `publicUser()` includes `gameActivity` in all user responses
+- API route: `PATCH /api/users/me/activity` (in `website/server/routes/activity.js`), requires Bearer auth
+- On update: emits `activity:update { userId, game }` to all `srv:{serverId}` rooms the user is in
+- Frontend: `UserProfileCard.jsx` shows green "Playing X" badge with Gamepad2 icon when `member.gameActivity` is set
+- Electron integration: `AuthContext.jsx` calls `window.electronVoxa?.reportToken(token)` on login/register and `window.electronVoxa?.clearToken()` on logout
+
 ## iOS App (ios/)
 
 - `ios/Voxa.xcodeproj` — real Xcode project targeting iOS 16+, bundle ID `lol.voxa.app`
 - All Swift models in `Models.swift` align exactly with backend `shapeMessage`/`getServerWithChannels` camelCase JSON
 - API paths: messages → `/api/channels/:id/messages`, auth → `/api/auth/login|register|me`, servers → `/api/servers`
 - Real-time uses **polling** (3s interval) not WebSocket — avoids Socket.IO protocol complexity in native Swift
-- GitHub workflow (`.github/workflows/ios.yml`): simulator build always runs; IPA export only when `IOS_CERT_BASE64`, `IOS_PROFILE_BASE64`, `APPLE_TEAM_ID` secrets are set
+- GitHub workflow (`.github/workflows/ios.yml`): uses `macos-15` runner with Xcode 16.4 explicitly selected (`sudo xcode-select -s /Applications/Xcode_16.4.app/...`); simulator build always runs; IPA export only when `IOS_CERT_BASE64`, `IOS_PROFILE_BASE64`, `APPLE_TEAM_ID` secrets are set
+- **iOS build fix**: `Voxa.xcodeproj` expects `RootView.swift` at `ios/Voxa/RootView.swift` (directly in Voxa group, not under Views/). The file also exists at `ios/Voxa/Views/RootView.swift` but that path is NOT in the pbxproj build sources — only `ios/Voxa/RootView.swift` is compiled.
 - `ios/ExportOptions.plist` uses `REPLACE_TEAM_ID` placeholder — `sed` replaces it in CI with `$APPLE_TEAM_ID`
 - `UserAvatarBubble`, `ServerIconView`, `ServerAcronymView` defined in `ServerListView.swift` — accessible across all files in same module without import
 - `User.swiftAvatarColor` and `ServerMember.swiftAvatarColor` are computed Color properties; `User.avatarColor` is `String?` (raw hex from API)

@@ -10,14 +10,14 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -27,7 +27,7 @@ jobs:
       #   IOS_CERT_BASE64       — base64-encoded P12 certificate
       #   IOS_CERT_PASSWORD     — P12 password
       #   IOS_PROFILE_BASE64    — base64-encoded .mobileprovision
-      #   APPLE_TEAM_ID         — 10-char Apple Team ID (e.g. ABC123DEFG)
+      #   APPLE_TEAM_ID         — 10-char Apple Team ID
 
       - name: Install certificate
         if: ${{ env.IOS_CERT_BASE64 != '' }}
@@ -63,7 +63,7 @@ jobs:
             -project Voxa.xcodeproj \
             -scheme Voxa 2>&1 | tail -20 || true
 
-      - name: Build for simulator (always runs — verifies compilation)
+      - name: Build for simulator (verifies compilation)
         run: |
           cd ios
           xcodebuild build \
@@ -101,7 +101,6 @@ jobs:
           IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          # Write ExportOptions with the real team ID
           sed "s/REPLACE_TEAM_ID/$APPLE_TEAM_ID/" ios/ExportOptions.plist \
             > $RUNNER_TEMP/ExportOptions.plist
           xcodebuild -exportArchive \
@@ -110,7 +109,7 @@ jobs:
             -exportPath $RUNNER_TEMP/export \
             2>&1 | tail -10
 
-      - name: Upload IPA artifact
+      - name: Upload IPA
         if: ${{ env.IOS_CERT_BASE64 != '' && env.IOS_PROFILE_BASE64 != '' }}
         env:
           IOS_CERT_BASE64: ${{ secrets.IOS_CERT_BASE64 }}
@@ -120,7 +119,7 @@ jobs:
           path: ${{ runner.temp }}/export/*.ipa
           retention-days: 30
 
-      # ── Simulator build artifact (fallback when no signing certs) ──────────
+      # ── Simulator build artifact (no signing certs) ────────────────────────
 
       - name: Build unsigned .app for simulator
         if: ${{ env.IOS_CERT_BASE64 == '' }}
@@ -136,7 +135,7 @@ jobs:
             -derivedDataPath $RUNNER_TEMP/DerivedData \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tail -5
+            2>&1 | tail -10
 
       - name: Upload simulator build
         if: ${{ env.IOS_CERT_BASE64 == '' }}
@@ -147,3 +146,4 @@ jobs:
           name: Voxa-Simulator-${{ github.sha }}
           path: ${{ runner.temp }}/DerivedData/Build/Products/Release-iphonesimulator/Voxa.app
           retention-days: 14
+          if-no-files-found: warn

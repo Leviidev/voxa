@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { X, Crown } from 'lucide-react'
+import { X, Crown, Gamepad2 } from 'lucide-react'
 
 const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
 const avatarColor = (name) => COLORS[(name?.charCodeAt(0) ?? 0) % COLORS.length]
@@ -91,6 +91,16 @@ export default function UserProfileCard({ member, anchorRect, onClose, serverId 
             {STATUS_LABEL[member.status] ?? 'Offline'}
           </div>
         </div>
+
+        {/* Game Activity */}
+        {member.gameActivity && (
+          <div className="mt-2 flex items-center gap-1.5 bg-[#F2F3F5] rounded-lg px-2.5 py-1.5">
+            <Gamepad2 size={13} className="text-[#23a55a] shrink-0" />
+            <span className="text-xs font-semibold text-[#3C3F44] truncate">
+              Playing <span className="text-[#23a55a]">{member.gameActivity}</span>
+            </span>
+          </div>
+        )}
 
         {/* Bio */}
         {member.bio && (
