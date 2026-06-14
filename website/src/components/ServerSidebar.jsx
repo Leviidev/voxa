@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, MessageSquare, LogOut, Settings } from 'lucide-react'
+import { Plus, MessageSquare, LogOut } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useUnread } from '../context/UnreadContext.jsx'
@@ -61,24 +61,21 @@ export default function ServerSidebar() {
 
   return (
     <>
-      <div className="m-2 w-[210px] bg-[#111214] rounded-2xl shadow-2xl shrink-0 flex flex-col overflow-hidden border border-white/[0.05]">
+      <div className="w-[220px] bg-[#1E1F22] shrink-0 flex flex-col overflow-hidden border-r border-black/20">
 
         {/* Logo / Home */}
-        <div className="px-3 pt-3 pb-2">
+        <div className="h-12 px-3 flex items-center border-b border-black/20 shrink-0">
           <button
             onClick={() => navigate('/voxa/me')}
             className={clsx(
-              'w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl transition-all group',
+              'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all group',
               !serverId
                 ? 'bg-white/[0.08]'
                 : 'hover:bg-white/[0.05]'
             )}
           >
-            {!serverId && (
-              <div className="w-0.5 h-5 rounded-full bg-[#E53935] absolute -left-0.5" />
-            )}
-            <div className="w-7 h-7 rounded-lg bg-[#E53935] flex items-center justify-center shrink-0 shadow-sm">
-              <span className="text-white font-black text-sm leading-none">v</span>
+            <div className="w-6 h-6 rounded-md bg-[#E53935] flex items-center justify-center shrink-0">
+              <span className="text-white font-black text-xs leading-none">v</span>
             </div>
             <span className="font-black text-white text-sm tracking-tight">voxa</span>
             <MessageSquare
@@ -91,14 +88,12 @@ export default function ServerSidebar() {
           </button>
         </div>
 
-        <div className="mx-3 h-px bg-white/[0.06]" />
-
         {/* Servers list */}
-        <div className="flex-1 overflow-y-auto scrollable py-3 px-2">
+        <div className="flex-1 overflow-y-auto scrollable py-2 px-2">
           {servers.length > 0 && (
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 px-2.5 pb-2 pt-1">
-                Your servers
+              <p className="text-[9px] font-bold uppercase tracking-widest text-[#6B6E75] px-2.5 pb-1.5 pt-2">
+                Your Servers
               </p>
               {servers.map(srv => {
                 const isActive = serverId === srv.id
@@ -108,7 +103,7 @@ export default function ServerSidebar() {
                     key={srv.id}
                     onClick={() => goServer(srv)}
                     className={clsx(
-                      'relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all text-left mb-0.5',
+                      'relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left mb-0.5',
                       isActive ? 'bg-white/[0.08]' : 'hover:bg-white/[0.05]'
                     )}
                   >
@@ -116,14 +111,14 @@ export default function ServerSidebar() {
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-[#E53935]" />
                     )}
                     <div
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-bold shrink-0 shadow-sm"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                       style={{ background: serverColor(srv.name) }}
                     >
                       {acronym(srv.name)}
                     </div>
                     <span className={clsx(
                       'text-sm font-medium truncate flex-1',
-                      isActive ? 'text-white' : 'text-white/50 group-hover:text-white/70'
+                      isActive ? 'text-[#DBDEE1]' : 'text-[#949BA4] group-hover:text-[#DBDEE1]'
                     )}>
                       {srv.name}
                     </span>
@@ -138,7 +133,7 @@ export default function ServerSidebar() {
 
           {servers.length === 0 && (
             <div className="px-3 py-8 text-center">
-              <p className="text-white/30 text-xs leading-relaxed">
+              <p className="text-[#6B6E75] text-xs leading-relaxed">
                 No servers yet.<br />Create one below.
               </p>
             </div>
@@ -146,30 +141,28 @@ export default function ServerSidebar() {
         </div>
 
         {/* Add server button */}
-        <div className="mx-3 h-px bg-white/[0.06]" />
-        <div className="px-2 py-2">
+        <div className="px-2 pb-2">
           <button
             onClick={() => setShowCreate(true)}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/[0.05] transition-all group"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.05] transition-all group"
           >
-            <div className="w-7 h-7 rounded-lg border border-white/[0.12] flex items-center justify-center shrink-0">
-              <Plus size={13} className="text-white/40 group-hover:text-white/70 transition-colors" />
+            <div className="w-7 h-7 rounded-lg border border-white/[0.10] flex items-center justify-center shrink-0">
+              <Plus size={13} className="text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors" />
             </div>
-            <span className="text-sm font-medium text-white/40 group-hover:text-white/70 transition-colors">
+            <span className="text-sm font-medium text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors">
               Add a server
             </span>
           </button>
         </div>
 
         {/* User section */}
-        <div className="mx-3 h-px bg-white/[0.06]" />
-        <div className="px-2 py-2.5 flex items-center gap-2">
+        <div className="h-14 bg-[#161719] px-3 flex items-center gap-2 shrink-0 border-t border-black/20">
           <UserAvatar user={user} size={28} />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white/80 truncate leading-tight">
+            <div className="text-xs font-semibold text-[#DBDEE1] truncate leading-tight">
               {user?.displayName || user?.username || 'you'}
             </div>
-            <div className="text-[10px] text-white/30 leading-tight">
+            <div className="text-[10px] text-[#6B6E75] leading-tight">
               #{user?.discriminator || '0000'}
             </div>
           </div>
@@ -178,7 +171,7 @@ export default function ServerSidebar() {
             className="w-6 h-6 rounded-lg hover:bg-white/[0.08] flex items-center justify-center transition-colors group shrink-0"
             title="Sign out"
           >
-            <LogOut size={12} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            <LogOut size={12} className="text-[#6B6E75] group-hover:text-[#949BA4] transition-colors" />
           </button>
         </div>
 

@@ -2,8 +2,12 @@
   "name": "voxa-linux",
   "version": "0.1.0",
   "description": "Voxa Desktop App for Linux",
+  "homepage": "https://voxa.lol",
   "main": "main.js",
-  "author": "Voxa",
+  "author": {
+    "name": "Voxa",
+    "email": "hello@voxa.lol"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -33,7 +37,8 @@
       ],
       "category": "Network",
       "icon": "assets/icon.png",
-      "artifactName": "Voxa-${version}.${ext}"
+      "artifactName": "Voxa-${version}.${ext}",
+      "maintainer": "Voxa <hello@voxa.lol>"
     },
     "deb": {
       "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils"]

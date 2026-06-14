@@ -1,0 +1,70 @@
+
+> voxa-macos@0.1.0 dist
+> electron-builder --mac
+
+  • electron-builder  version=24.13.3 os=24.6.0
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=package.json ("build" field)
+  • packaging       platform=darwin arch=x64 electron=31.7.7 appOutDir=dist/mac
+  • downloading     url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-darwin-x64.zip size=103 MB parts=6
+  • downloaded      url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-darwin-x64.zip duration=849ms
+  • default Electron icon is used  reason=application icon is not set
+  • skipped macOS code signing  reason=identity explicitly is set to null
+  • building        target=DMG arch=x64 file=dist/Voxa-0.1.0.dmg
+  • Detected arm64 process, HFS+ is unavailable. Creating dmg with APFS - supports Mac OSX 10.12+
+  • packaging       platform=darwin arch=arm64 electron=31.7.7 appOutDir=dist/mac-arm64
+  • downloading     url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-darwin-arm64.zip size=97 MB parts=6
+  • downloaded      url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-darwin-arm64.zip duration=672ms
+  • skipped macOS code signing  reason=identity explicitly is set to null
+  • building        target=DMG arch=arm64 file=dist/Voxa-0.1.0.dmg
+  • Detected arm64 process, HFS+ is unavailable. Creating dmg with APFS - supports Mac OSX 10.12+
+  • Above command failed, retrying 5 more times
+  ⨯ Cannot cleanup: 
+
+Error #1 --------------------------------------------------------------------------------
+Error: hdiutil process failed ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
+Exit code:
+1
+    at ChildProcess.<anonymous> (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/util.ts:252:14)
+    at Object.onceWrapper (node:events:639:26)
+    at ChildProcess.emit (node:events:524:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at Process.ChildProcess._handle.onexit (node:internal/child_process:304:5)
+
+Error #2 --------------------------------------------------------------------------------
+Error: hdiutil process failed ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
+Exit code:
+1
+    at ChildProcess.<anonymous> (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/util.ts:252:14)
+    at Object.onceWrapper (node:events:639:26)
+    at ChildProcess.emit (node:events:524:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at Process.ChildProcess._handle.onexit (node:internal/child_process:304:5)  failedTask=build stackTrace=Error: Cannot cleanup: 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Error #1 --------------------------------------------------------------------------------
+Error: hdiutil process failed ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
+Exit code:
+1
+    at ChildProcess.<anonymous> (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/util.ts:252:14)
+    at Object.onceWrapper (node:events:639:26)
+    at ChildProcess.emit (node:events:524:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at Process.ChildProcess._handle.onexit (node:internal/child_process:304:5)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Error #2 --------------------------------------------------------------------------------
+Error: hdiutil process failed ERR_ELECTRON_BUILDER_CANNOT_EXECUTE
+Exit code:
+1
+    at ChildProcess.<anonymous> (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/util.ts:252:14)
+    at Object.onceWrapper (node:events:639:26)
+    at ChildProcess.emit (node:events:524:28)
+    at maybeClose (node:internal/child_process:1104:16)
+    at Process.ChildProcess._handle.onexit (node:internal/child_process:304:5)
+    at throwError (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/asyncTaskManager.ts:89:11)
+    at checkErrors (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/asyncTaskManager.ts:53:9)
+    at AsyncTaskManager.awaitTasks (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/asyncTaskManager.ts:67:7)
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at Packager.doBuild (/Users/runner/work/voxa/voxa/macos/node_modules/app-builder-lib/src/packager.ts:461:5)
+    at executeFinally (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/promise.ts:12:14)
+    at Packager._build (/Users/runner/work/voxa/voxa/macos/node_modules/app-builder-lib/src/packager.ts:379:31)
+    at Packager.build (/Users/runner/work/voxa/voxa/macos/node_modules/app-builder-lib/src/packager.ts:340:12)
+    at executeFinally (/Users/runner/work/voxa/voxa/macos/node_modules/builder-util/src/promise.ts:12:14)
+Error: Process completed with exit code 1.

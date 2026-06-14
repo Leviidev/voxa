@@ -2,8 +2,12 @@
   "name": "voxa-macos",
   "version": "0.1.0",
   "description": "Voxa Desktop App for macOS",
+  "homepage": "https://voxa.lol",
   "main": "main.js",
-  "author": "Voxa",
+  "author": {
+    "name": "Voxa",
+    "email": "hello@voxa.lol"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -28,7 +32,7 @@
     ],
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ],
       "category": "public.app-category.social-networking",
       "minimumSystemVersion": "13.0",

@@ -16,6 +16,20 @@ android {
         versionName = "1.0.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = System.getenv("KEYSTORE_FILE") ?: "${rootDir}/voxa-release.keystore"
+            val keystorePass = System.getenv("KEYSTORE_PASSWORD") ?: "voxa_release"
+            val keyAlias = System.getenv("KEY_ALIAS") ?: "voxa"
+            val keyPass = System.getenv("KEY_PASSWORD") ?: "voxa_release"
+
+            storeFile = file(keystoreFile)
+            storePassword = keystorePass
+            keyAlias = keyAlias
+            keyPassword = keyPass
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -23,6 +37,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseConfig = signingConfigs.findByName("release")
+            if (releaseConfig != null && file(releaseConfig.storeFile!!).exists()) {
+                signingConfig = releaseConfig
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 

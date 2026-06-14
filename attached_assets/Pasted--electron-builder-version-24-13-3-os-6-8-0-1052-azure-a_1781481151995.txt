@@ -1,0 +1,36 @@
+
+  • electron-builder  version=24.13.3 os=6.8.0-1052-azure
+  • artifacts will be published if draft release exists  reason=CI detected
+  • loaded configuration  file=package.json ("build" field)
+  • packaging       platform=linux arch=x64 electron=31.7.7 appOutDir=dist/linux-unpacked
+  • downloading     url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-linux-x64.zip size=106 MB parts=8
+  • downloaded      url=https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-linux-x64.zip duration=436ms
+  • building        target=AppImage arch=x64 file=dist/Voxa-0.1.0.AppImage
+  • default Electron icon is used  reason=application icon is not set
+  • downloading     url=https://github.com/electron-userland/electron-builder-binaries/releases/download/appimage-12.0.1/appimage-12.0.1.7z size=1.6 MB parts=1
+  • downloaded      url=https://github.com/electron-userland/electron-builder-binaries/releases/download/appimage-12.0.1/appimage-12.0.1.7z duration=398ms
+  • building        target=deb arch=x64 file=dist/Voxa-0.1.0.deb
+  ⨯ Please specify project homepage, see https://electron.build/configuration/configuration#Metadata-homepage
+
+Please specify author 'email' in the application package.json
+
+See https://docs.npmjs.com/files/package.json#people-fields-author-contributors
+
+It is required to set Linux .deb package maintainer. Or you can set maintainer in the custom linux options.
+(see https://www.electron.build/configuration/linux).
+  failedTask=build stackTrace=Error: Please specify project homepage, see https://electron.build/configuration/configuration#Metadata-homepage
+                                                                                                                                                                                                                                                                                                                                                                                                                                     Please specify author 'email' in the application package.json
+                                                                                                                                                                                                                                                                                                                                                                                                                                     See https://docs.npmjs.com/files/package.json#people-fields-author-contributors
+                                                                                                                                                                                                                                                                                                                                                                                                                                     It is required to set Linux .deb package maintainer. Or you can set maintainer in the custom linux options.
+(see https://www.electron.build/configuration/linux).
+                                                                                                                                                                                                                                                                                                                                                                                                                                         at FpmTarget.computeFpmMetaInfoOptions (/home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/targets/FpmTarget.ts:94:13)
+    at FpmTarget.build (/home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/targets/FpmTarget.ts:165:25)
+    at /home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/platformPackager.ts:158:11
+    at async Promise.all (index 0)
+    at AsyncTaskManager.awaitTasks (/home/runner/work/voxa/voxa/linux/node_modules/builder-util/src/asyncTaskManager.ts:65:25)
+    at Packager.doBuild (/home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/packager.ts:461:5)
+    at executeFinally (/home/runner/work/voxa/voxa/linux/node_modules/builder-util/src/promise.ts:12:14)
+    at Packager._build (/home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/packager.ts:379:31)
+    at Packager.build (/home/runner/work/voxa/voxa/linux/node_modules/app-builder-lib/src/packager.ts:340:12)
+    at executeFinally (/home/runner/work/voxa/voxa/linux/node_modules/builder-util/src/promise.ts:12:14)
+Error: Process completed with exit code 1.
