@@ -20,6 +20,7 @@
   "build": {
     "appId": "lol.voxa.desktop",
     "productName": "Voxa",
+    "publish": null,
     "directories": {
       "output": "dist"
     },
