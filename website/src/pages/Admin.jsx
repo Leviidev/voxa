@@ -1,12 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.jsx'
-import { Upload, CheckCircle2, AlertCircle, Clock, HardDrive, Hash, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
-import { api } from '../lib/api.js'
+import { Upload, CheckCircle2, AlertCircle, Clock, HardDrive, Hash, ExternalLink, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 
 function fmtBytes(n) {
   if (!n) return '—'
-  if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
@@ -16,10 +12,90 @@ function fmtDate(d) {
   return new Date(d).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-export default function Admin() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [authorized, setAuthorized] = useState(null)
+const TOKEN_KEY = 'voxa_admin_token'
+
+function adminFetch(path, opts = {}) {
+  const token = sessionStorage.getItem(TOKEN_KEY)
+  return fetch(path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` },
+  })
+}
+
+// ── Password Gate ─────────────────────────────────────────────────────────────
+function PasswordGate({ onUnlock }) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!password) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Incorrect password'); return }
+      sessionStorage.setItem(TOKEN_KEY, data.token)
+      onUnlock()
+    } catch {
+      setError('Could not reach server')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-[#F7F8FA]">
+      <div className="w-full max-w-[360px] mx-4">
+        <div className="flex items-center gap-2 justify-center mb-8">
+          <div className="w-9 h-9 bg-[#E53935] rounded-xl flex items-center justify-center shadow-sm">
+            <span className="text-white font-black text-xl leading-none">v</span>
+          </div>
+          <span className="text-[#1A1B1E] font-black text-xl tracking-tight">voxa</span>
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-[#E3E5E8]">
+          <div className="w-12 h-12 rounded-full bg-[#F2F3F5] flex items-center justify-center mx-auto mb-4">
+            <Lock size={20} className="text-[#5C6068]" />
+          </div>
+          <h1 className="text-lg font-black text-[#1A1B1E] text-center tracking-tight mb-1">Admin Access</h1>
+          <p className="text-[#96989D] text-xs text-center mb-6">Enter the admin password to continue</p>
+          <form onSubmit={submit} noValidate>
+            <input
+              autoFocus
+              type="password"
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError('') }}
+              placeholder="Password"
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] focus:border-[#E53935] rounded-xl px-4 py-3 text-sm text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors mb-3"
+            />
+            {error && (
+              <div className="flex items-center gap-1.5 text-[#E53935] text-xs mb-3">
+                <AlertCircle size={12} />
+                {error}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={!password || loading}
+              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-all text-sm"
+            >
+              {loading ? 'Verifying…' : 'Unlock'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
+function Dashboard({ onLock }) {
   const [releases, setReleases] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -33,31 +109,13 @@ export default function Admin() {
   const [showHistory, setShowHistory] = useState(false)
   const fileRef = useRef(null)
 
-  useEffect(() => {
-    if (!user) { navigate('/login'); return }
-    checkAdmin()
-  }, [user])
-
-  const checkAdmin = async () => {
-    try {
-      const res = await fetch('/api/admin/status', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('voxa_token')}` },
-      })
-      if (!res.ok) { setAuthorized(false); setLoading(false); return }
-      setAuthorized(true)
-      fetchReleases()
-    } catch {
-      setAuthorized(false)
-      setLoading(false)
-    }
-  }
+  useEffect(() => { fetchReleases() }, [])
 
   const fetchReleases = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/releases', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('voxa_token')}` },
-      })
+      const res = await adminFetch('/api/admin/releases')
+      if (res.status === 401) { onLock(); return }
       const data = await res.json()
       setReleases(Array.isArray(data) ? data : [])
     } catch { setReleases([]) }
@@ -65,41 +123,29 @@ export default function Admin() {
   }
 
   const handleDrop = (e) => {
-    e.preventDefault()
-    setDragOver(false)
+    e.preventDefault(); setDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (file?.name.endsWith('.exe')) setSelectedFile(file)
+    if (file?.name.toLowerCase().endsWith('.exe')) setSelectedFile(file)
   }
 
   const handleUpload = async () => {
     if (!selectedFile) return
-    setUploading(true)
-    setUploadError('')
-    setUploadResult(null)
-    setProgress(0)
-
+    setUploading(true); setUploadError(''); setUploadResult(null); setProgress(0)
     const formData = new FormData()
     formData.append('file', selectedFile)
     if (version.trim()) formData.append('version', version.trim())
     if (notes.trim()) formData.append('notes', notes.trim())
-
     try {
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('POST', '/api/admin/releases/upload')
-        xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('voxa_token')}`)
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100))
-        }
+        xhr.setRequestHeader('Authorization', `Bearer ${sessionStorage.getItem(TOKEN_KEY)}`)
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100)) }
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText)
-            setUploadResult(data)
-            setSelectedFile(null)
-            setVersion('')
-            setNotes('')
-            fetchReleases()
-            resolve()
+            setUploadResult(JSON.parse(xhr.responseText))
+            setSelectedFile(null); setVersion(''); setNotes('')
+            fetchReleases(); resolve()
           } else {
             try { reject(new Error(JSON.parse(xhr.responseText).error)) }
             catch { reject(new Error('Upload failed')) }
@@ -108,47 +154,15 @@ export default function Admin() {
         xhr.onerror = () => reject(new Error('Network error'))
         xhr.send(formData)
       })
-    } catch (err) {
-      setUploadError(err.message)
-    } finally {
-      setUploading(false)
-      setProgress(0)
-    }
+    } catch (err) { setUploadError(err.message) }
+    finally { setUploading(false); setProgress(0) }
   }
 
   const latest = releases[0] ?? null
 
-  if (authorized === null) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#F7F8FA]">
-        <div className="w-8 h-8 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  if (authorized === false) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#F7F8FA]">
-        <div className="text-center">
-          <div className="w-14 h-14 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle size={24} className="text-[#E53935]" />
-          </div>
-          <h1 className="text-xl font-black text-[#1A1B1E] mb-2">Access Denied</h1>
-          <p className="text-[#5C6068] text-sm mb-4">Your account is not an admin.</p>
-          <button onClick={() => navigate('/voxa/me')}
-            className="text-[#E53935] text-sm font-semibold hover:underline">
-            Back to Voxa
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-[#F7F8FA] p-6">
       <div className="max-w-3xl mx-auto">
-
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-[#E53935] rounded-xl flex items-center justify-center shadow-sm">
@@ -159,13 +173,13 @@ export default function Admin() {
               <p className="text-[#96989D] text-xs mt-0.5">Release Management</p>
             </div>
           </div>
-          <button onClick={() => navigate('/voxa/me')}
-            className="text-xs font-medium text-[#96989D] hover:text-[#5C6068] transition-colors">
-            ← Back to app
+          <button onClick={onLock}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#96989D] hover:text-[#5C6068] transition-colors">
+            <Lock size={11} /> Lock
           </button>
         </div>
 
-        {/* Current release card */}
+        {/* Current release */}
         <div className="bg-white rounded-2xl border border-[#E3E5E8] p-5 mb-4 shadow-sm">
           <h2 className="text-xs font-bold uppercase tracking-widest text-[#96989D] mb-4">Current Live Release</h2>
           {loading ? (
@@ -177,23 +191,20 @@ export default function Admin() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#F7F8FA] rounded-xl p-3">
                   <div className="flex items-center gap-1.5 text-[#96989D] mb-1">
-                    <Hash size={11} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">SHA-256</span>
+                    <Hash size={11} /><span className="text-[10px] font-bold uppercase tracking-wider">SHA-256</span>
                   </div>
                   <p className="text-xs font-mono text-[#313439] break-all leading-relaxed">{latest.sha256}</p>
                 </div>
                 <div className="space-y-2">
                   <div className="bg-[#F7F8FA] rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-[#96989D] mb-1">
-                      <Clock size={11} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Uploaded</span>
+                      <Clock size={11} /><span className="text-[10px] font-bold uppercase tracking-wider">Uploaded</span>
                     </div>
                     <p className="text-xs text-[#313439]">{fmtDate(latest.uploadedAt)}</p>
                   </div>
                   <div className="bg-[#F7F8FA] rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-[#96989D] mb-1">
-                      <HardDrive size={11} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Size</span>
+                      <HardDrive size={11} /><span className="text-[10px] font-bold uppercase tracking-wider">Size</span>
                     </div>
                     <p className="text-xs text-[#313439]">{fmtBytes(latest.sizeBytes)}{latest.version ? ` · v${latest.version}` : ''}</p>
                   </div>
@@ -201,8 +212,7 @@ export default function Admin() {
               </div>
               <a href={latest.url} target="_blank" rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-[#E53935] font-semibold hover:underline">
-                <ExternalLink size={11} />
-                {latest.url}
+                <ExternalLink size={11} />{latest.url}
               </a>
             </div>
           ) : (
@@ -210,11 +220,9 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Upload card */}
+        {/* Upload */}
         <div className="bg-white rounded-2xl border border-[#E3E5E8] p-5 mb-4 shadow-sm">
           <h2 className="text-xs font-bold uppercase tracking-widest text-[#96989D] mb-4">Upload New Release</h2>
-
-          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
@@ -243,41 +251,27 @@ export default function Admin() {
             )}
           </div>
 
-          {/* Version + notes */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1 block">Version (optional)</label>
-              <input
-                value={version}
-                onChange={e => setVersion(e.target.value)}
-                placeholder="e.g. 0.2.0"
-                className="w-full bg-[#F7F8FA] border border-[#E3E5E8] focus:border-[#E53935] rounded-xl px-3 py-2 text-sm text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors"
-              />
+              <input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 0.2.0"
+                className="w-full bg-[#F7F8FA] border border-[#E3E5E8] focus:border-[#E53935] rounded-xl px-3 py-2 text-sm text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors" />
             </div>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1 block">Release Notes (optional)</label>
-              <input
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="What changed?"
-                className="w-full bg-[#F7F8FA] border border-[#E3E5E8] focus:border-[#E53935] rounded-xl px-3 py-2 text-sm text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors"
-              />
+              <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="What changed?"
+                className="w-full bg-[#F7F8FA] border border-[#E3E5E8] focus:border-[#E53935] rounded-xl px-3 py-2 text-sm text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors" />
             </div>
           </div>
 
-          {/* Upload progress */}
           {uploading && (
             <div className="mb-4">
-              <div className="flex items-center justify-between text-xs text-[#5C6068] mb-1">
-                <span>Uploading…</span>
-                <span>{progress}%</span>
-              </div>
+              <div className="flex justify-between text-xs text-[#5C6068] mb-1"><span>Uploading…</span><span>{progress}%</span></div>
               <div className="h-2 bg-[#F7F8FA] rounded-full overflow-hidden">
                 <div className="h-full bg-[#E53935] rounded-full transition-all duration-200" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
-
           {uploadResult && (
             <div className="mb-4 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl p-3">
               <CheckCircle2 size={16} className="text-[#23a55a] shrink-0 mt-0.5" />
@@ -287,19 +281,14 @@ export default function Admin() {
               </div>
             </div>
           )}
-
           {uploadError && (
             <div className="mb-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
               <AlertCircle size={16} className="text-[#E53935] shrink-0" />
               <p className="text-sm text-[#E53935]">{uploadError}</p>
             </div>
           )}
-
-          <button
-            onClick={handleUpload}
-            disabled={!selectedFile || uploading}
-            className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm"
-          >
+          <button onClick={handleUpload} disabled={!selectedFile || uploading}
+            className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-sm">
             {uploading ? `Uploading… ${progress}%` : 'Upload Release'}
           </button>
         </div>
@@ -307,13 +296,9 @@ export default function Admin() {
         {/* History */}
         {releases.length > 1 && (
           <div className="bg-white rounded-2xl border border-[#E3E5E8] shadow-sm overflow-hidden">
-            <button
-              onClick={() => setShowHistory(v => !v)}
-              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#F7F8FA] transition-colors"
-            >
-              <span className="text-xs font-bold uppercase tracking-widest text-[#96989D]">
-                Release History ({releases.length})
-              </span>
+            <button onClick={() => setShowHistory(v => !v)}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#F7F8FA] transition-colors">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#96989D]">Release History ({releases.length})</span>
               {showHistory ? <ChevronUp size={14} className="text-[#96989D]" /> : <ChevronDown size={14} className="text-[#96989D]" />}
             </button>
             {showHistory && (
@@ -324,7 +309,6 @@ export default function Admin() {
                       <div className="flex items-center gap-2 mb-0.5">
                         {r.version && <span className="text-xs font-bold text-[#1A1B1E]">v{r.version}</span>}
                         <span className="text-[10px] text-[#96989D]">{fmtDate(r.uploadedAt)}</span>
-                        {r.uploaderName && <span className="text-[10px] text-[#96989D]">by {r.uploaderName}</span>}
                       </div>
                       <p className="text-[10px] font-mono text-[#96989D] truncate">{r.sha256}</p>
                     </div>
@@ -338,4 +322,22 @@ export default function Admin() {
       </div>
     </div>
   )
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+export default function Admin() {
+  const [unlocked, setUnlocked] = useState(false)
+
+  useEffect(() => {
+    const token = sessionStorage.getItem(TOKEN_KEY)
+    if (!token) return
+    fetch('/api/admin/status', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (r.ok) setUnlocked(true) })
+      .catch(() => {})
+  }, [])
+
+  const lock = () => { sessionStorage.removeItem(TOKEN_KEY); setUnlocked(false) }
+
+  if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />
+  return <Dashboard onLock={lock} />
 }

@@ -4,21 +4,27 @@ import { createHash } from 'crypto'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import multer from 'multer'
-import { requireAuth } from '../middleware/auth.js'
-import { createRelease, getLatestRelease, getReleaseHistory } from '../db.js'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { createRelease, getReleaseHistory } from '../db.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '../../uploads/releases')
 
 if (!existsSync(UPLOADS_DIR)) mkdirSync(UPLOADS_DIR, { recursive: true })
 
-function requireAdmin(req, res, next) {
-  const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-  if (!adminEmails.length) return res.status(403).json({ error: 'No admins configured. Set ADMIN_EMAILS env var.' })
-  if (!req.user?.email || !adminEmails.includes(req.user.email.toLowerCase())) {
-    return res.status(403).json({ error: 'Admin access required.' })
+const ADMIN_SECRET = () => (process.env.JWT_SECRET || 'voxa_dev_secret_change_in_prod') + '_admin'
+
+function requireAdminToken(req, res, next) {
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Admin token required' })
+  try {
+    const payload = jwt.verify(auth.slice(7), ADMIN_SECRET())
+    if (!payload.admin) throw new Error('Not an admin token')
+    next()
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired admin token' })
   }
-  next()
 }
 
 const storage = multer.diskStorage({
@@ -48,14 +54,34 @@ async function sha256File(filePath) {
 }
 
 const router = Router()
-router.use(requireAuth)
-router.use(requireAdmin)
 
-router.get('/status', (req, res) => {
-  res.json({ admin: true, email: req.user.email })
+// ── Auth (no token required) ──────────────────────────────────────────────────
+router.post('/auth', async (req, res) => {
+  try {
+    const { password } = req.body
+    if (!password) return res.status(400).json({ error: 'Password required' })
+
+    const hash = process.env.ADMIN_PASSWORD_HASH
+    if (!hash) return res.status(503).json({ error: 'Admin not configured' })
+
+    const match = await bcrypt.compare(password, hash)
+    if (!match) return res.status(401).json({ error: 'Incorrect password' })
+
+    const token = jwt.sign({ admin: true }, ADMIN_SECRET(), { expiresIn: '8h' })
+    res.json({ token })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 })
 
-router.get('/releases', async (req, res) => {
+// ── Protected routes ──────────────────────────────────────────────────────────
+router.use(requireAdminToken)
+
+router.get('/status', (_req, res) => {
+  res.json({ admin: true })
+})
+
+router.get('/releases', async (_req, res) => {
   try {
     const history = await getReleaseHistory('windows', 20)
     res.json(history.map(r => ({
@@ -90,7 +116,7 @@ router.post('/releases/upload', upload.single('file'), async (req, res) => {
       sizeBytes: req.file.size,
       version: version?.trim() || null,
       notes: notes?.trim() || null,
-      uploadedBy: req.user.id,
+      uploadedBy: null,
     })
 
     res.json({
