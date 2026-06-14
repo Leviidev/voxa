@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil, Gamepad2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
@@ -17,8 +17,8 @@ const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '😮', '😢', 
 
 export default function ChatArea({ channel, server }) {
   const { user } = useAuth()
-  const { connected } = useSocket()
-  const { refetch } = useServers()
+  const { connected, socket } = useSocket()
+  const { refetch, updateMemberActivity } = useServers()
   const { messages, loading, addMessage, deleteMessage, editMessage, toggleReaction, setPinned } = useMessages(channel?.id)
   const { typers, onTyping, stopTyping } = useTyping(channel?.id, user)
   const [input, setInput] = useState('')
@@ -62,6 +62,14 @@ export default function ChatArea({ channel, server }) {
   }, [messages])
 
   useEffect(() => { inputRef.current?.focus() }, [channel?.id])
+
+  // Live game activity updates from Electron clients
+  useEffect(() => {
+    if (!socket) return
+    const handler = ({ userId, game }) => updateMemberActivity(userId, game)
+    socket.on('activity:update', handler)
+    return () => socket.off('activity:update', handler)
+  }, [socket, updateMemberActivity])
 
   const sendMessage = async (e) => {
     e.preventDefault()
@@ -679,12 +687,17 @@ function MemberList({ members, onMemberClick }) {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-[#5C6068] truncate">{m.displayName ?? m.username}</div>
-                {m.roles?.length > 0 && m.roles.find(r => !r.isDefault && r.name !== '@everyone') && (
+                {m.gameActivity ? (
+                  <div className="flex items-center gap-0.5 text-[10px] font-medium text-[#23a55a] truncate">
+                    <Gamepad2 size={9} className="shrink-0" />
+                    <span className="truncate">{m.gameActivity}</span>
+                  </div>
+                ) : m.roles?.length > 0 && m.roles.find(r => !r.isDefault && r.name !== '@everyone') ? (
                   <div className="text-[10px] font-medium truncate"
                     style={{ color: m.roles.find(r => !r.isDefault)?.color || '#E53935' }}>
                     {m.roles.find(r => !r.isDefault)?.name}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           ))}

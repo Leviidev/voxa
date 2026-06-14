@@ -82,8 +82,17 @@ export function ServersProvider({ children }) {
     try { await api.deleteServer(serverId) } catch (_) {}
   }
 
+  const updateMemberActivity = useCallback((userId, game) => {
+    setServers(prev => prev.map(s => ({
+      ...s,
+      members: (s.members ?? []).map(m =>
+        m.id === userId ? { ...m, gameActivity: game ?? null } : m
+      ),
+    })))
+  }, [])
+
   return (
-    <ServersContext.Provider value={{ servers, loading, createServer, createChannel, deleteServer, refetch: fetchServers }}>
+    <ServersContext.Provider value={{ servers, loading, createServer, createChannel, deleteServer, refetch: fetchServers, updateMemberActivity }}>
       {children}
     </ServersContext.Provider>
   )
