@@ -15,7 +15,9 @@ description: Key architecture decisions, design system, and deployment notes for
 
 ## Database Schema (PostgreSQL)
 
-Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `friend_requests`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `friend_requests`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`, `reports`, `releases`
+
+**reports table:** `id UUID PK DEFAULT gen_random_uuid(), reporter_id TEXT REFERENCES users, message_id TEXT, user_id TEXT REFERENCES users, reason TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ`. DB functions: `createReport({reporterId, messageId, userId, reason})`, `getReports({status?})`. Route: `POST /api/reports` (authenticated). API client methods: `api.reportMessage(messageId, reason)`, `api.reportUser(userId, reason)`.
 
 **friend_requests table:** `id TEXT PK, from_user_id TEXT REFERENCES users, to_user_id TEXT REFERENCES users, status TEXT CHECK('pending','accepted','declined'), created_at TIMESTAMPTZ, UNIQUE(from_user_id, to_user_id)`. Friendship = accepted friend request — no separate friendships table. Routes at `/api/friends/*` via `server/routes/friends.js`.
 - Snake_case columns in DB; camelCase in API responses (mapped in db.js)
@@ -40,13 +42,25 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - **Temp tokens**: `signTempToken` / `verifyTempToken` in `middleware/auth.js`; `requireAuth` rejects tokens with `_temp: true`.
 - **Security routes**: `website/server/routes/security.js` — mounted at `/api/auth` in `index.js`.
 
-## Design System (Light Theme)
+## Design System (Dark Theme — applied June 2026)
 
-- Primary bg: `#FFFFFF`, Sidebar: `#F2F3F5`, Sidebar dark: `#E3E5E8`
-- Hover: `#EAEBEE`, Selected: `#E0E2E6`, Input: `#EAEBEE`, Border: `#E3E5E8`
-- Accent red: `#E53935` (brand default, user-customizable via CSS var `--accent`)
-- Text: `#1A1B1E` (header/bold), `#313439` (body), `#5C6068` (muted), `#96989D` (dim)
-- Support email: voxa@voxa.lol (shown in footer and login page)
+All UI components now use a cohesive dark theme matching Discord's palette:
+- **bg-primary** `#313338` — main chat area, DM chat, top bar
+- **bg-secondary** `#2B2D31` — channel sidebar, member list, thread panel, pinned panel, profile card
+- **bg-tertiary** `#1E1F22` — deeper inputs, banners, voice channel bg
+- **bg-input** `#383A40` — message input box, edit textareas
+- **bg-panel** `#232428` — user panel (bottom of channel sidebar)
+- **text-primary** `#DBDEE1` — message body, input text, headings
+- **text-muted** `#949BA4` — member names, timestamps, role text
+- **text-subtle** `#6B6E75` — dimmed labels, placeholder text, icons
+- **border** `white/[0.06]` — all dividers and panel borders
+- **hover** `white/[0.06]` / `white/[0.08]` — interactive hover states
+- **active** `white/[0.10]` — selected channel/DM rows
+- **accent** `#E53935` — brand red (unchanged)
+- **status-online** `#23a55a`, **status-idle** `#f0b232`, **status-dnd** `#f23f43`, **status-offline** `#6B6E75`
+- **AppLayout** outer bg: `#1E1F22`
+
+**Do not reintroduce light colors** (`bg-white`, `bg-[#F7F8FA]`, `border-[#E3E5E8]`, `text-[#1A1B1E]`) in any component — the whole app is dark.
 
 ## Theme System
 
@@ -62,7 +76,8 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 
 - Entry: `windows/main.js` (Electron main), `windows/preload.js` (context bridge), `windows/package.json`
 - Loads the Voxa website in a BrowserWindow (`VOXA_URL` env var, defaults to `https://voxa.lol`)
-- Game detection: polls `tasklist /FO CSV /NH` every 10s on Windows, `ps -eo comm` on macOS/Linux; matches against 60+ game `.exe` names in the GAMES array
+- Game detection: polls `tasklist /FO CSV /NH` every 10s on Windows; matches against 60+ game `.exe` names in the GAMES array
+- **Game detection bug fix**: `cmdContains` check must guard `match.cmdline` being non-empty before applying — `if (game.cmdContains && match.cmdline && !match.cmdline.includes(...))`. On Windows, tasklist returns empty cmdline so skipping cmdContains when cmdline='' prevents Java/Minecraft false-negatives. Applied to all 3 platforms (windows/macos/linux main.js).
 - IPC flow: renderer calls `window.electronVoxa.reportToken(token)` on login → main stores JWT → calls `PATCH /api/users/me/activity` when game changes → clears on logout/quit
 - System tray: shows current game or "Voxa"; minimize-to-tray on window close
 - Build: `npm run dist` with electron-builder → NSIS installer + portable `.exe` in `windows/dist/`
@@ -90,7 +105,7 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 
 - Entry: `macos/main.js`, `macos/preload.js`, `macos/package.json`
 - `titleBarStyle: 'hiddenInset'` + `trafficLightPosition` — uses native macOS traffic lights, no custom controls injected
-- Game detection: `ps -eo comm=` (macOS process names differ from Windows .exe names)
+- Game detection: `ps -eo comm=,args=` — name = first word, cmdline = rest. cmdContains check skipped when cmdline=''.
 - Auto-updater: downloads `.dmg`, verifies SHA-256, then calls `open` to mount it (user drags to Applications)
 - No tray balloons — uses `new Notification(...)` via Electron's Notification API
 - Build: `npm run dist` → universal DMG + ZIP for x64 + arm64 in `macos/dist/`
@@ -103,6 +118,20 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 - On update: emits `activity:update { userId, game }` to all `srv:{serverId}` rooms the user is in
 - Frontend: `UserProfileCard.jsx` shows green "Playing X" badge with Gamepad2 icon when `member.gameActivity` is set
 - Electron integration: `AuthContext.jsx` calls `window.electronVoxa?.reportToken(token)` on login/register and `window.electronVoxa?.clearToken()` on logout
+
+## Message & User Reporting
+
+- `POST /api/reports` — authenticated, accepts `{ messageId?, userId?, reason }`. Stores in `reports` table.
+- Frontend: Report button (Flag icon) appears on hover on other users' messages in ChatArea and DmChat.
+- ReportModal in ChatArea — 6 preset reasons, inline success state.
+- UserProfileCard has "Report user" button at bottom.
+- API client: `api.reportMessage(messageId, reason)`, `api.reportUser(userId, reason)`.
+
+## Profile Viewing
+
+- ChatArea: clicking avatar or name opens `UserProfileCard` positioned near click; falls back to inline data if member not in `server.members`.
+- DmChat: clicking header avatar/name OR message avatar/name opens `UserProfileCard`. `other` user object used as profile data.
+- UserProfileCard: dark-themed, shows status, game activity, bio, dates, roles, "Report user" button.
 
 ## iOS App (ios/)
 
@@ -132,7 +161,8 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 ## Key Design Decisions
 
 - Server sidebar (220px) is a **dark floating card**: `m-2 bg-[#111214] rounded-2xl shadow-2xl border border-white/[0.05]` — unique vs Discord
-- App layout outer bg: `#E8EAED` so dark sidebar "floats" against it
+- App layout outer bg: `#1E1F22` (previously `#E8EAED`, changed to match dark theme)
+- Channel sidebar: `bg-[#2B2D31]`, no outer border — blends with dark app bg
 - Server sidebar shows server **names** as full rows with icon + left red pill indicator for active
 - Login form uses `noValidate` to suppress browser-native validation messages
 - `mockData.js` still exists in `src/data/` but nothing imports it (orphan file, safe to delete later)

@@ -300,7 +300,9 @@ function detectGame(procs) {
     const exeLower = game.exe.toLowerCase()
     const match = procs.find(p => p.name === exeLower)
     if (!match) continue
-    if (game.cmdContains && !match.cmdline.includes(game.cmdContains.toLowerCase())) continue
+    // Only apply cmdContains filter when we actually have command-line data.
+    // On Windows (tasklist), cmdline is '' so we trust the exe name alone.
+    if (game.cmdContains && match.cmdline && !match.cmdline.includes(game.cmdContains.toLowerCase())) continue
     return game.name
   }
   return null

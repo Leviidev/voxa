@@ -24,6 +24,7 @@ import adminRoutes from './routes/admin.js'
 import friendRoutes from './routes/friends.js'
 import releasesRoutes from './routes/releases.js'
 import githubRoutes from './routes/github.js'
+import reportsRoutes from './routes/reports.js'
 
 const app = express()
 const httpServer = createServer(app)
@@ -193,6 +194,7 @@ app.use('/api/invites', inviteRoutes)
 app.use('/api/dms', dmRoutes)
 app.use('/api/unread', unreadRoutes)
 app.use('/api/friends', friendRoutes)
+app.use('/api/reports', reportsRoutes)
 
 // ─── Static Frontend (production) ─────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {

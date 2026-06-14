@@ -235,7 +235,7 @@ function detectGame(procs) {
     const exeLower = game.exe.toLowerCase()
     const match = procs.find(p => p.name === exeLower)
     if (!match) continue
-    if (game.cmdContains && !match.cmdline.includes(game.cmdContains.toLowerCase())) continue
+    if (game.cmdContains && match.cmdline && !match.cmdline.includes(game.cmdContains.toLowerCase())) continue
     return game.name
   }
   return null

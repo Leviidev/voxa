@@ -23,18 +23,18 @@ export default function ChannelSidebar() {
 
   return (
     <>
-      <div className="w-[220px] bg-[#F7F8FA] border-r border-[#E3E5E8] flex flex-col shrink-0">
+      <div className="w-[220px] bg-[#2B2D31] flex flex-col shrink-0">
         {/* Header */}
-        <div className="h-12 px-4 flex items-center justify-between border-b border-[#E3E5E8] shrink-0 group">
+        <div className="h-12 px-4 flex items-center justify-between border-b border-white/[0.06] shrink-0 shadow-sm">
           {isMe ? (
-            <span className="font-bold text-[#1A1B1E] text-sm">Direct Messages</span>
+            <span className="font-bold text-white text-sm">Direct Messages</span>
           ) : (
             <>
-              <span className="font-bold text-[#1A1B1E] text-sm truncate flex-1">{server?.name ?? '…'}</span>
+              <span className="font-bold text-white text-sm truncate flex-1">{server?.name ?? '…'}</span>
               <button
                 onClick={() => setShowServerSettings(true)}
                 title="Server Settings"
-                className="w-6 h-6 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors shrink-0 ml-1"
+                className="w-6 h-6 rounded-lg hover:bg-white/[0.08] flex items-center justify-center text-[#949BA4] hover:text-[#DBDEE1] transition-colors shrink-0 ml-1"
               >
                 <Settings size={13} />
               </button>
@@ -56,7 +56,7 @@ export default function ChannelSidebar() {
               unread={unread}
             />
           ) : (
-            <div className="px-4 py-4 text-[#96989D] text-xs">Server not found</div>
+            <div className="px-4 py-4 text-[#6B6E75] text-xs">Server not found</div>
           )}
         </div>
 
@@ -112,9 +112,9 @@ function DMList({ navigate, user, unread }) {
   return (
     <div className="px-2">
       <div className="flex items-center justify-between px-2 pt-2 pb-1">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-[#96989D]">Direct Messages</p>
+        <p className="text-[9px] font-bold uppercase tracking-widest text-[#6B6E75]">Direct Messages</p>
         <button onClick={() => setShowNew(v => !v)}
-          className="text-[#96989D] hover:text-[#5C6068] transition-colors" title="New DM">
+          className="text-[#6B6E75] hover:text-[#DBDEE1] transition-colors" title="New DM">
           <Plus size={13} />
         </button>
       </div>
@@ -126,7 +126,7 @@ function DMList({ navigate, user, unread }) {
             value={newUsername}
             onChange={e => { setNewUsername(e.target.value); setNewError('') }}
             placeholder="username or username#1234"
-            className="w-full bg-white border border-[#E3E5E8] focus:border-[#E53935] rounded-lg px-3 py-1.5 text-xs text-[#1A1B1E] outline-none placeholder:text-[#96989D] transition-colors"
+            className="w-full bg-[#1E1F22] border border-white/[0.08] focus:border-[#E53935]/50 rounded-lg px-3 py-1.5 text-xs text-[#DBDEE1] outline-none placeholder:text-[#6B6E75] transition-colors"
           />
           {newError && <p className="text-[10px] text-[#E53935] mt-1 px-1">{newError}</p>}
           <div className="flex gap-1 mt-1">
@@ -135,7 +135,7 @@ function DMList({ navigate, user, unread }) {
               {newLoading ? '…' : 'Open DM'}
             </button>
             <button type="button" onClick={() => { setShowNew(false); setNewUsername(''); setNewError('') }}
-              className="px-2 bg-[#F2F3F5] text-[#5C6068] rounded-lg py-1 text-[11px] font-medium hover:bg-[#EAEBEE] transition-colors">
+              className="px-2 bg-white/[0.06] text-[#949BA4] rounded-lg py-1 text-[11px] font-medium hover:bg-white/[0.10] transition-colors">
               Cancel
             </button>
           </div>
@@ -144,7 +144,7 @@ function DMList({ navigate, user, unread }) {
 
       {dms.length === 0 && !showNew && (
         <div className="py-6 text-center">
-          <p className="text-[#96989D] text-xs leading-relaxed">No messages yet.<br />Click + to start a DM.</p>
+          <p className="text-[#6B6E75] text-xs leading-relaxed">No messages yet.<br />Click + to start a DM.</p>
         </div>
       )}
 
@@ -158,7 +158,7 @@ function DMList({ navigate, user, unread }) {
           <button key={dm.id} onClick={() => navigate(`/voxa/me/dms/${dm.id}`)}
             className={clsx(
               'w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
-              active ? 'bg-[#E0E2E6]' : 'hover:bg-[#EAEBEE]'
+              active ? 'bg-white/[0.10]' : 'hover:bg-white/[0.06]'
             )}>
             <div className="relative shrink-0">
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold overflow-hidden"
@@ -168,17 +168,19 @@ function DMList({ navigate, user, unread }) {
                   : name[0]?.toUpperCase()}
               </div>
               {dmUnread > 0 && !active && (
-                <div className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#E53935] border-2 border-[#F7F8FA] flex items-center justify-center">
+                <div className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#E53935] border-2 border-[#2B2D31] flex items-center justify-center">
                   <span className="text-white text-[8px] font-bold leading-none">{dmUnread > 99 ? '99+' : dmUnread}</span>
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className={clsx('text-sm font-medium truncate leading-tight', active ? 'text-[#1A1B1E]' : dmUnread > 0 ? 'text-[#1A1B1E]' : 'text-[#5C6068]')}>
+              <div className={clsx('text-sm font-medium truncate leading-tight',
+                active ? 'text-white' : dmUnread > 0 ? 'text-white' : 'text-[#949BA4]')}>
                 {name}
               </div>
               {dm.lastMessage && (
-                <div className={clsx('text-[10px] truncate leading-tight', dmUnread > 0 && !active ? 'text-[#313439] font-medium' : 'text-[#96989D]')}>
+                <div className={clsx('text-[10px] truncate leading-tight',
+                  dmUnread > 0 && !active ? 'text-[#DBDEE1] font-medium' : 'text-[#6B6E75]')}>
                   {dm.lastMessage.content}
                 </div>
               )}
@@ -215,7 +217,7 @@ function Category({ cat, channelId, navigate, serverId, onAddChannel, unread }) 
       <div className="flex items-center px-3 py-1 group">
         <button
           onClick={() => setCollapsed(v => !v)}
-          className="flex items-center gap-1 flex-1 text-[#96989D] hover:text-[#5C6068] transition-colors"
+          className="flex items-center gap-1 flex-1 text-[#6B6E75] hover:text-[#949BA4] transition-colors"
         >
           {collapsed
             ? <ChevronRight size={10} className="shrink-0" />
@@ -224,7 +226,7 @@ function Category({ cat, channelId, navigate, serverId, onAddChannel, unread }) 
         </button>
         <button
           onClick={onAddChannel}
-          className="opacity-0 group-hover:opacity-100 text-[#96989D] hover:text-[#5C6068] transition-all"
+          className="opacity-0 group-hover:opacity-100 text-[#6B6E75] hover:text-[#DBDEE1] transition-all"
         >
           <Plus size={13} />
         </button>
@@ -253,18 +255,18 @@ function ChannelRow({ ch, active, navigate, serverId, unreadCount }) {
       className={clsx(
         'flex items-center gap-2 px-3 py-1.5 mx-2 rounded-lg cursor-pointer transition-colors',
         active
-          ? 'bg-[#E0E2E6] text-[#1A1B1E]'
+          ? 'bg-white/[0.10] text-white'
           : hasUnread
-            ? 'text-[#1A1B1E] hover:bg-[#EAEBEE]'
-            : 'text-[#96989D] hover:bg-[#EAEBEE] hover:text-[#5C6068]',
+            ? 'text-white hover:bg-white/[0.06]'
+            : 'text-[#949BA4] hover:bg-white/[0.06] hover:text-[#DBDEE1]',
         isVoice && 'cursor-default'
       )}
     >
       <Icon size={14} className="shrink-0" />
       <span className={clsx('text-sm flex-1 truncate', hasUnread ? 'font-semibold' : 'font-medium')}>{ch.name}</span>
-      {ch.locked && <Lock size={11} className="shrink-0 opacity-60" />}
+      {ch.locked && <Lock size={11} className="shrink-0 opacity-50" />}
       {hasUnread && (
-        <div className="w-2 h-2 rounded-full bg-[#E53935] shrink-0" />
+        <div className="w-2 h-2 rounded-full bg-white shrink-0" />
       )}
     </div>
   )
@@ -279,7 +281,7 @@ function UserPanel({ user, logout, navigate }) {
 
   if (!user) return null
   return (
-    <div className="h-14 bg-[#E3E5E8] px-3 flex items-center gap-2 shrink-0 border-t border-[#D5D7DC]">
+    <div className="h-14 bg-[#232428] px-3 flex items-center gap-2 shrink-0 border-t border-white/[0.06]">
       <div className="relative cursor-pointer shrink-0" onClick={() => navigate('/voxa/me')}>
         <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden"
           style={{ background: user.avatarUrl ? undefined : color }}>
@@ -287,14 +289,14 @@ function UserPanel({ user, logout, navigate }) {
             ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
             : (user.displayName ?? user.username)?.[0]?.toUpperCase()}
         </div>
-        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#23a55a] border-2 border-[#E3E5E8]" />
+        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#23a55a] border-2 border-[#232428]" />
       </div>
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/voxa/me')}>
-        <div className="text-xs font-semibold text-[#1A1B1E] truncate leading-tight">
+        <div className="text-xs font-semibold text-[#DBDEE1] truncate leading-tight">
           {user.displayName ?? user.username}
         </div>
-        <div className="text-[10px] text-[#96989D] truncate">
+        <div className="text-[10px] text-[#6B6E75] truncate">
           {user.customStatus || `#${user.discriminator}`}
         </div>
       </div>
@@ -322,8 +324,8 @@ function PanelBtn({ children, label, onClick, active }) {
       className={clsx(
         'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
         active
-          ? 'bg-[#E53935]/10 text-[#E53935]'
-          : 'text-[#96989D] hover:bg-[#D5D7DC] hover:text-[#5C6068]'
+          ? 'bg-[#E53935]/20 text-[#E53935]'
+          : 'text-[#6B6E75] hover:bg-white/[0.08] hover:text-[#DBDEE1]'
       )}
     >
       {children}

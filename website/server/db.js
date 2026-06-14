@@ -1192,6 +1192,42 @@ export async function updateGameActivity(userId, game) {
   await pool.query('UPDATE users SET game_activity = $1 WHERE id = $2', [value, userId])
 }
 
+// ─── Reports ─────────────────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reporter_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    message_id TEXT,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`).catch(err => console.error('reports table init failed:', err.message))
+
+export async function createReport({ reporterId, messageId, userId, reason }) {
+  const { rows } = await pool.query(
+    `INSERT INTO reports (reporter_id, message_id, user_id, reason)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, status, created_at`,
+    [reporterId, messageId ?? null, userId ?? null, reason]
+  )
+  return rows[0]
+}
+
+export async function getReports({ status } = {}) {
+  const { rows } = await pool.query(
+    `SELECT r.*, u.username as reporter_username
+     FROM reports r
+     LEFT JOIN users u ON r.reporter_id = u.id
+     ${status ? 'WHERE r.status = $1' : ''}
+     ORDER BY r.created_at DESC LIMIT 100`,
+    status ? [status] : []
+  )
+  return rows
+}
+
 // ─── Releases ────────────────────────────────────────────────────────────────
 
 pool.query(`

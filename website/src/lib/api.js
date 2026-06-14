@@ -162,6 +162,12 @@ export const api = {
   deleteDmMessage: (dmId, msgId) =>
     request(`/dms/${dmId}/messages/${msgId}`, { method: 'DELETE' }),
 
+  // Reports
+  reportMessage: (messageId, reason) =>
+    request('/reports', { method: 'POST', body: JSON.stringify({ messageId, reason }) }),
+  reportUser: (userId, reason) =>
+    request('/reports', { method: 'POST', body: JSON.stringify({ userId, reason }) }),
+
   // Friends
   sendFriendRequest: (username) =>
     request('/friends/request', { method: 'POST', body: JSON.stringify({ username }) }),

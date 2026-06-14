@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil, Gamepad2 } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil, Gamepad2, Flag } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
@@ -28,7 +28,8 @@ export default function ChatArea({ channel, server }) {
   const [editVal, setEditVal] = useState('')
   const [sendError, setSendError] = useState('')
   const [threadMsgId, setThreadMsgId] = useState(null)
-  const [activeProfile, setActiveProfile] = useState(null) // { member, anchorRect }
+  const [activeProfile, setActiveProfile] = useState(null)
+  const [reportingMsg, setReportingMsg] = useState(null)
   const [topic, setTopic] = useState(channel?.topic ?? '')
   const [editingTopic, setEditingTopic] = useState(false)
   const [topicInput, setTopicInput] = useState('')
@@ -37,12 +38,8 @@ export default function ChatArea({ channel, server }) {
   const prevChannelId = useRef(channel?.id)
   const isOwner = server?.ownerId === user?.id
 
-  // Sync topic when channel changes
-  useEffect(() => {
-    setTopic(channel?.topic ?? '')
-  }, [channel?.id, channel?.topic])
+  useEffect(() => { setTopic(channel?.topic ?? '') }, [channel?.id, channel?.topic])
 
-  // Close thread/pins when switching channels
   useEffect(() => {
     if (channel?.id !== prevChannelId.current) {
       setThreadMsgId(null)
@@ -56,14 +53,11 @@ export default function ChatArea({ channel, server }) {
   }, [channel?.id])
 
   useEffect(() => {
-    if (!threadMsgId) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (!threadMsgId) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => { inputRef.current?.focus() }, [channel?.id])
 
-  // Live game activity updates from Electron clients
   useEffect(() => {
     if (!socket) return
     const handler = ({ userId, game }) => updateMemberActivity(userId, game)
@@ -110,17 +104,13 @@ export default function ChatArea({ channel, server }) {
   }
 
   const handlePinMsg = async (msgId) => {
-    try {
-      await api.pinMessage(channel.id, msgId)
-      setPinned?.(msgId, true)
-    } catch (err) { console.error(err) }
+    try { await api.pinMessage(channel.id, msgId); setPinned?.(msgId, true) }
+    catch (err) { console.error(err) }
   }
 
   const handleUnpinMsg = async (msgId) => {
-    try {
-      await api.unpinMessage(channel.id, msgId)
-      setPinned?.(msgId, false)
-    } catch (err) { console.error(err) }
+    try { await api.unpinMessage(channel.id, msgId); setPinned?.(msgId, false) }
+    catch (err) { console.error(err) }
   }
 
   const saveTopic = async () => {
@@ -140,13 +130,13 @@ export default function ChatArea({ channel, server }) {
 
   if (channel?.type === 'voice') {
     return (
-      <div className="flex-1 bg-white flex flex-col items-center justify-center gap-4 text-[#96989D]">
-        <div className="w-20 h-20 rounded-2xl bg-[#F2F3F5] flex items-center justify-center border border-[#E3E5E8]">
-          <Volume2 size={32} className="text-[#96989D]" />
+      <div className="flex-1 bg-[#313338] flex flex-col items-center justify-center gap-4 text-[#949BA4]">
+        <div className="w-20 h-20 rounded-2xl bg-white/[0.06] flex items-center justify-center border border-white/[0.06]">
+          <Volume2 size={32} className="text-[#6B6E75]" />
         </div>
         <div className="text-center">
-          <div className="text-[#1A1B1E] font-bold text-lg mb-1">{channel.name}</div>
-          <p className="text-sm text-[#5C6068]">Voice Channel</p>
+          <div className="text-white font-bold text-lg mb-1">{channel.name}</div>
+          <p className="text-sm text-[#949BA4]">Voice Channel</p>
         </div>
         <button className="bg-[#23a55a] hover:bg-[#1e9150] text-white font-semibold px-8 py-2.5 rounded-full transition-colors text-sm">
           Join Voice Channel
@@ -156,24 +146,24 @@ export default function ChatArea({ channel, server }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#313338] overflow-hidden">
       {/* Reconnecting banner */}
       {!connected && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 shrink-0">
-          <WifiOff size={13} className="text-amber-600 shrink-0" />
-          <span className="text-amber-700 text-xs font-medium">Reconnecting… messages may be delayed</span>
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center gap-2 shrink-0">
+          <WifiOff size={13} className="text-amber-400 shrink-0" />
+          <span className="text-amber-300 text-xs font-medium">Reconnecting… messages may be delayed</span>
         </div>
       )}
 
       {/* Top Bar */}
-      <div className="shrink-0 bg-white border-b border-[#E3E5E8]">
+      <div className="shrink-0 bg-[#313338] border-b border-white/[0.06]">
         <div className="h-12 px-4 flex items-center gap-2.5">
-          <Hash size={18} className="text-[#96989D] shrink-0" />
-          <span className="font-semibold text-[#1A1B1E] text-sm">{channel?.name ?? 'general'}</span>
+          <Hash size={18} className="text-[#6B6E75] shrink-0" />
+          <span className="font-semibold text-white text-sm">{channel?.name ?? 'general'}</span>
           {topic && (
             <>
-              <div className="w-px h-4 bg-[#E3E5E8] mx-1 hidden sm:block" />
-              <span className="text-[#96989D] text-xs hidden sm:block truncate max-w-xs">{topic}</span>
+              <div className="w-px h-4 bg-white/[0.12] mx-1 hidden sm:block" />
+              <span className="text-[#6B6E75] text-xs hidden sm:block truncate max-w-xs">{topic}</span>
             </>
           )}
           <div className="flex-1" />
@@ -181,7 +171,7 @@ export default function ChatArea({ channel, server }) {
             {connected && (
               <div className="flex items-center gap-1 mr-2" title="Live">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#23a55a] animate-pulse" />
-                <span className="text-[10px] text-[#96989D] hidden sm:block">Live</span>
+                <span className="text-[10px] text-[#6B6E75] hidden sm:block">Live</span>
               </div>
             )}
             <TopBtn icon={Bell} label="Notifications" />
@@ -190,13 +180,12 @@ export default function ChatArea({ channel, server }) {
             {isOwner && (
               <TopBtn icon={Pencil} label="Edit Topic" onClick={() => { setTopicInput(topic); setEditingTopic(true) }} />
             )}
-            <div className="mx-1 bg-[#F2F3F5] border border-[#E3E5E8] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
-              <Search size={12} className="text-[#96989D]" />
-              <span className="text-xs text-[#96989D] w-14 hidden sm:block">Search</span>
+            <div className="mx-1 bg-white/[0.06] border border-white/[0.08] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
+              <Search size={12} className="text-[#6B6E75]" />
+              <span className="text-xs text-[#6B6E75] w-14 hidden sm:block">Search</span>
             </div>
           </div>
         </div>
-        {/* Topic editor */}
         {editingTopic && (
           <div className="px-4 pb-2 flex items-center gap-2">
             <input
@@ -206,10 +195,10 @@ export default function ChatArea({ channel, server }) {
               onKeyDown={e => { if (e.key === 'Enter') saveTopic(); if (e.key === 'Escape') setEditingTopic(false) }}
               placeholder="Set a channel topic…"
               maxLength={500}
-              className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+              className="flex-1 bg-[#1E1F22] border border-white/[0.08] text-[#DBDEE1] rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935]/50 placeholder:text-[#6B6E75]"
             />
             <button onClick={saveTopic} className="bg-[#E53935] text-white text-xs font-semibold px-3 py-1.5 rounded-xl hover:bg-[#C62828] transition-colors">Save</button>
-            <button onClick={() => setEditingTopic(false)} className="text-[#96989D] hover:text-[#5C6068] text-xs transition-colors">Cancel</button>
+            <button onClick={() => setEditingTopic(false)} className="text-[#6B6E75] hover:text-[#949BA4] text-xs transition-colors">Cancel</button>
           </div>
         )}
       </div>
@@ -247,10 +236,11 @@ export default function ChatArea({ channel, server }) {
                   onOpenThread={() => openThread(msg.id)}
                   threadOpen={threadMsgId === msg.id}
                   onPin={() => msg.isPinned ? handleUnpinMsg(msg.id) : handlePinMsg(msg.id)}
+                  onReport={() => setReportingMsg(msg)}
                   onAvatarClick={(e) => {
                     const member = server?.members?.find(m => m.id === msg.authorId)
                     if (member) openProfile(member, e)
-                    else openProfile({ username: msg.author, displayName: msg.displayName, avatarUrl: msg.avatarUrl, avatarColor: msg.avatarColor, status: 'offline' }, e)
+                    else openProfile({ id: msg.authorId, username: msg.author, displayName: msg.displayName, avatarUrl: msg.avatarUrl, avatarColor: msg.avatarColor, status: 'offline' }, e)
                   }}
                 />
               )
@@ -262,14 +252,14 @@ export default function ChatArea({ channel, server }) {
 
           {sendError && (
             <div className="px-5 pb-1">
-              <p className="text-red-500 text-xs">{sendError}</p>
+              <p className="text-[#E53935] text-xs">{sendError}</p>
             </div>
           )}
 
           <div className="px-4 pb-4 shrink-0">
             <form onSubmit={sendMessage}
-              className="bg-[#F2F3F5] border border-[#E3E5E8] rounded-xl flex items-center gap-2 px-4 focus-within:ring-2 focus-within:ring-[#E53935]/20 focus-within:border-[#E53935]/40 transition-all">
-              <button type="button" className="text-[#96989D] hover:text-[#5C6068] py-3 shrink-0 transition-colors">
+              className="bg-[#383A40] border border-white/[0.06] rounded-xl flex items-center gap-2 px-4 focus-within:border-white/[0.12] transition-all">
+              <button type="button" className="text-[#6B6E75] hover:text-[#949BA4] py-3 shrink-0 transition-colors">
                 <Plus size={18} />
               </button>
               <input
@@ -278,35 +268,25 @@ export default function ChatArea({ channel, server }) {
                 onChange={e => { setInput(e.target.value); onTyping() }}
                 onKeyDown={e => { if (e.key === 'Escape') { setInput(''); stopTyping() } }}
                 placeholder={`Message #${channel?.name ?? 'general'}`}
-                className="flex-1 bg-transparent text-[#1A1B1E] text-sm py-3 outline-none placeholder:text-[#96989D]"
+                className="flex-1 bg-transparent text-[#DBDEE1] text-sm py-3 outline-none placeholder:text-[#6B6E75]"
                 maxLength={2000}
               />
-              <button type="button" className="text-[#96989D] hover:text-[#5C6068] transition-colors p-1">
+              <button type="button" className="text-[#6B6E75] hover:text-[#949BA4] transition-colors p-1">
                 <Smile size={17} />
               </button>
             </form>
-            <p className="text-[#96989D] text-xs mt-1 px-1">
-              Press <kbd className="bg-[#F2F3F5] border border-[#E3E5E8] px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> to send
+            <p className="text-[#6B6E75] text-xs mt-1 px-1">
+              Press <kbd className="bg-white/[0.06] border border-white/[0.08] px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> to send
             </p>
           </div>
         </div>
 
-        {/* Right panels — thread > pins > members */}
+        {/* Right panels */}
         {threadMsgId && (
-          <ThreadPanel
-            key={threadMsgId}
-            parentId={threadMsgId}
-            channelName={channel?.name}
-            onClose={() => setThreadMsgId(null)}
-          />
+          <ThreadPanel key={threadMsgId} parentId={threadMsgId} channelName={channel?.name} onClose={() => setThreadMsgId(null)} />
         )}
         {showPins && !threadMsgId && channel && (
-          <PinnedMessagesPanel
-            channel={channel}
-            currentUserId={user?.id}
-            onClose={() => setShowPins(false)}
-            onUnpin={(msgId) => setPinned?.(msgId, false)}
-          />
+          <PinnedMessagesPanel channel={channel} currentUserId={user?.id} onClose={() => setShowPins(false)} onUnpin={(msgId) => setPinned?.(msgId, false)} />
         )}
         {showMembers && !threadMsgId && !showPins && server && (
           <MemberList members={server.members} onMemberClick={openProfile} />
@@ -320,6 +300,14 @@ export default function ChatArea({ channel, server }) {
           anchorRect={activeProfile.anchorRect}
           onClose={() => setActiveProfile(null)}
           serverId={server?.id}
+        />
+      )}
+
+      {/* Report modal */}
+      {reportingMsg && (
+        <ReportModal
+          msg={reportingMsg}
+          onClose={() => setReportingMsg(null)}
         />
       )}
     </div>
@@ -340,13 +328,13 @@ function TypingIndicator({ typers }) {
       <span className="flex gap-0.5 items-end">
         {[0, 1, 2].map(i => (
           <span key={i}
-            className="w-1 h-1 rounded-full bg-[#96989D] animate-bounce"
+            className="w-1 h-1 rounded-full bg-[#6B6E75] animate-bounce"
             style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.9s' }}
           />
         ))}
       </span>
-      <span className="text-[11px] text-[#96989D]">
-        <strong className="font-semibold text-[#5C6068]">{label}</strong>…
+      <span className="text-[11px] text-[#6B6E75]">
+        <strong className="font-semibold text-[#949BA4]">{label}</strong>…
       </span>
     </div>
   )
@@ -358,7 +346,7 @@ function TopBtn({ icon: Icon, label, onClick, active }) {
     <button title={label} onClick={onClick}
       className={clsx(
         'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
-        active ? 'bg-[#E0E2E6] text-[#1A1B1E]' : 'text-[#96989D] hover:bg-[#F2F3F5] hover:text-[#5C6068]'
+        active ? 'bg-white/[0.10] text-white' : 'text-[#6B6E75] hover:bg-white/[0.06] hover:text-[#DBDEE1]'
       )}>
       <Icon size={17} />
     </button>
@@ -368,14 +356,14 @@ function TopBtn({ icon: Icon, label, onClick, active }) {
 // ── Channel welcome banner ────────────────────────────────────────────────────
 function ChannelWelcome({ channel, topic }) {
   return (
-    <div className="mb-6 pb-4 border-b border-[#F2F3F5]">
-      <div className="w-12 h-12 rounded-2xl bg-[#F2F3F5] border border-[#E3E5E8] flex items-center justify-center mb-3">
-        <Hash size={22} className="text-[#96989D]" />
+    <div className="mb-6 pb-4 border-b border-white/[0.06]">
+      <div className="w-12 h-12 rounded-2xl bg-white/[0.06] border border-white/[0.06] flex items-center justify-center mb-3">
+        <Hash size={22} className="text-[#6B6E75]" />
       </div>
-      <h3 className="text-xl font-black text-[#1A1B1E] mb-1">Welcome to #{channel?.name ?? 'general'}</h3>
+      <h3 className="text-xl font-black text-white mb-1">Welcome to #{channel?.name ?? 'general'}</h3>
       {topic
-        ? <p className="text-[#5C6068] text-sm">{topic}</p>
-        : <p className="text-[#5C6068] text-sm">This is the start of the #{channel?.name ?? 'general'} channel.</p>}
+        ? <p className="text-[#949BA4] text-sm">{topic}</p>
+        : <p className="text-[#949BA4] text-sm">This is the start of the #{channel?.name ?? 'general'} channel.</p>}
     </div>
   )
 }
@@ -393,8 +381,8 @@ function ReactionPills({ reactions, currentUserId, onReact }) {
             className={clsx(
               'flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all',
               reacted
-                ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]'
-                : 'bg-[#F2F3F5] border-[#E3E5E8] text-[#5C6068] hover:bg-[#EAEBEE] hover:border-[#D5D7DC]'
+                ? 'bg-[#E53935]/20 border-[#E53935]/30 text-[#E53935]'
+                : 'bg-white/[0.06] border-white/[0.08] text-[#949BA4] hover:bg-white/[0.10] hover:border-white/[0.12]'
             )}>
             <span>{emoji}</span>
             <span>{count}</span>
@@ -418,10 +406,10 @@ function QuickReactPicker({ onReact, onClose }) {
 
   return (
     <div ref={ref}
-      className="absolute bottom-full right-0 mb-1 bg-white border border-[#E3E5E8] rounded-xl shadow-lg p-1.5 flex gap-0.5 z-50">
+      className="absolute bottom-full right-0 mb-1 bg-[#2B2D31] border border-white/[0.08] rounded-xl shadow-2xl p-1.5 flex gap-0.5 z-50">
       {QUICK_EMOJIS.map(e => (
         <button key={e} onClick={() => { onReact(e); onClose() }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-lg hover:bg-[#F2F3F5] transition-colors">
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-lg hover:bg-white/[0.08] transition-colors">
           {e}
         </button>
       ))}
@@ -433,15 +421,11 @@ function QuickReactPicker({ onReact, onClose }) {
 function ThreadSummary({ replyCount, open, onClick }) {
   if (!replyCount) return null
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={clsx(
         'mt-1 flex items-center gap-1.5 text-xs font-medium rounded-lg px-2 py-1 -mx-2 transition-colors',
-        open
-          ? 'bg-[#E53935]/10 text-[#E53935]'
-          : 'text-[#5C6068] hover:bg-[#F2F3F5] hover:text-[#1A1B1E]'
-      )}
-    >
+        open ? 'bg-[#E53935]/10 text-[#E53935]' : 'text-[#949BA4] hover:bg-white/[0.06] hover:text-[#DBDEE1]'
+      )}>
       <MessageSquare size={11} />
       <span>{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
     </button>
@@ -450,7 +434,7 @@ function ThreadSummary({ replyCount, open, onClick }) {
 
 // ── Message row ───────────────────────────────────────────────────────────────
 function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal, onEditVal,
-  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact, onOpenThread, threadOpen, onPin, onAvatarClick }) {
+  onStartEdit, onSubmitEdit, onCancelEdit, onDelete, onReact, onOpenThread, threadOpen, onPin, onReport, onAvatarClick }) {
   const [showPicker, setShowPicker] = useState(false)
   const color = msg.avatarColor || avatarColor(msg.author)
   const isOptimistic = msg.id?.startsWith('opt_')
@@ -465,25 +449,25 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
 
   if (editing) {
     return (
-      <div className="flex items-start gap-3 px-3 -mx-3 py-2 rounded-xl bg-[#FFF5F5] border border-[#FECDD3] mt-2">
+      <div className="flex items-start gap-3 px-3 -mx-3 py-2 rounded-xl bg-[#E53935]/5 border border-[#E53935]/20 mt-2">
         <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 mt-0.5"
           style={{ background: color }}>
           {msg.author?.[0]?.toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="font-semibold text-[#1A1B1E] text-sm">{msg.displayName ?? msg.author}</span>
-            <span className="text-[#96989D] text-xs">{time}</span>
+            <span className="font-semibold text-[#DBDEE1] text-sm">{msg.displayName ?? msg.author}</span>
+            <span className="text-[#6B6E75] text-xs">{time}</span>
           </div>
           <input autoFocus value={editVal} onChange={e => onEditVal(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') onSubmitEdit(); if (e.key === 'Escape') onCancelEdit() }}
-            className="w-full bg-white border border-[#E3E5E8] text-[#1A1B1E] text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935]"
+            className="w-full bg-[#1E1F22] border border-white/[0.08] text-[#DBDEE1] text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-[#E53935]/25 focus:border-[#E53935]/50"
           />
           <div className="flex items-center gap-2 mt-1.5">
             <button onClick={onSubmitEdit} className="flex items-center gap-1 text-xs text-[#23a55a] hover:text-[#1e9150] font-medium transition-colors">
               <Check size={12} /> Save
             </button>
-            <button onClick={onCancelEdit} className="flex items-center gap-1 text-xs text-[#96989D] hover:text-[#5C6068] transition-colors">
+            <button onClick={onCancelEdit} className="flex items-center gap-1 text-xs text-[#6B6E75] hover:text-[#949BA4] transition-colors">
               <X size={12} /> Cancel
             </button>
           </div>
@@ -505,7 +489,7 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
 
   const nameLine = (
     <span
-      className="font-semibold text-[#1A1B1E] text-sm cursor-pointer hover:underline"
+      className="font-semibold text-[#DBDEE1] text-sm cursor-pointer hover:underline"
       onClick={onAvatarClick}>
       {msg.displayName ?? msg.author}
     </span>
@@ -519,15 +503,15 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
 
   if (grouped) return (
     <div className={clsx(
-      'flex items-start gap-4 pl-12 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-0.5',
+      'flex items-start gap-4 pl-12 group hover:bg-white/[0.02] rounded-xl px-3 -mx-3 py-0.5',
       isOptimistic && 'opacity-60',
-      threadOpen && 'bg-[#FFF5F5]',
+      threadOpen && 'bg-[#E53935]/5',
     )}>
-      <span className="text-[#96989D] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
+      <span className="text-[#6B6E75] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[#313439] leading-relaxed">
+        <p className="text-sm text-[#DBDEE1] leading-relaxed">
           {msg.content}
-          {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
+          {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
         {pinBadge}
         {reactions}
@@ -538,7 +522,7 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
           <MessageActions isOwn={isOwn} isOwner={isOwner} isPinned={msg.isPinned}
             onEdit={onStartEdit} onDelete={onDelete}
             onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen}
-            onPin={onPin} />
+            onPin={onPin} onReport={onReport} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -547,21 +531,21 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
 
   return (
     <div className={clsx(
-      'flex items-start gap-3 group hover:bg-[#F7F8FA] rounded-xl px-3 -mx-3 py-1.5 mt-2',
+      'flex items-start gap-3 group hover:bg-white/[0.02] rounded-xl px-3 -mx-3 py-1.5 mt-2',
       isOptimistic && 'opacity-60',
-      threadOpen && 'bg-[#FFF5F5]',
+      threadOpen && 'bg-[#E53935]/5',
     )}>
       {avatar}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 mb-0.5">
           {nameLine}
-          <span className="text-[#96989D] text-xs">{time}</span>
-          {isOptimistic && <span className="text-[#96989D] text-[10px]">sending…</span>}
+          <span className="text-[#6B6E75] text-xs">{time}</span>
+          {isOptimistic && <span className="text-[#6B6E75] text-[10px]">sending…</span>}
           {pinBadge}
         </div>
-        <p className="text-sm text-[#313439] leading-relaxed">
+        <p className="text-sm text-[#DBDEE1] leading-relaxed">
           {msg.content}
-          {msg.edited && <span className="text-[#96989D] text-[10px] ml-1">(edited)</span>}
+          {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
         {reactions}
         {threadSummary}
@@ -571,7 +555,7 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
           <MessageActions isOwn={isOwn} isOwner={isOwner} isPinned={msg.isPinned}
             onEdit={onStartEdit} onDelete={onDelete}
             onReactOpen={() => setShowPicker(v => !v)} onThread={onOpenThread} threadOpen={threadOpen}
-            onPin={onPin} />
+            onPin={onPin} onReport={onReport} />
           {showPicker && <QuickReactPicker onReact={onReact} onClose={() => setShowPicker(false)} />}
         </div>
       )}
@@ -580,64 +564,62 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
 }
 
 // ── Action buttons row ────────────────────────────────────────────────────────
-function MessageActions({ isOwn, isOwner, isPinned, onEdit, onDelete, onReactOpen, onThread, threadOpen, onPin }) {
+function MessageActions({ isOwn, isOwner, isPinned, onEdit, onDelete, onReactOpen, onThread, threadOpen, onPin, onReport }) {
   return (
     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
-      <button onClick={onReactOpen} title="Add Reaction"
-        className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors text-base">
-        😊
-      </button>
-      <button onClick={onThread} title="Open Thread"
-        className={clsx(
-          'w-7 h-7 rounded-lg border flex items-center justify-center shadow-sm transition-colors',
-          threadOpen
-            ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]'
-            : 'bg-white border-[#E3E5E8] text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC]'
-        )}>
+      <ActionBtn onClick={onReactOpen} title="Add Reaction" className="text-base">😊</ActionBtn>
+      <ActionBtn onClick={onThread} title="Open Thread" active={threadOpen}>
         <MessageSquare size={12} />
-      </button>
+      </ActionBtn>
       {isOwner && (
-        <button onClick={onPin} title={isPinned ? 'Unpin message' : 'Pin message'}
-          className={clsx(
-            'w-7 h-7 rounded-lg border flex items-center justify-center shadow-sm transition-colors',
-            isPinned
-              ? 'bg-[#6366F1]/10 border-[#6366F1]/30 text-[#6366F1]'
-              : 'bg-white border-[#E3E5E8] text-[#96989D] hover:text-[#6366F1] hover:border-[#6366F1]/30'
-          )}>
+        <ActionBtn onClick={onPin} title={isPinned ? 'Unpin' : 'Pin'} active={isPinned} activeColor="text-[#6366F1]">
           <Pin size={12} />
-        </button>
+        </ActionBtn>
+      )}
+      {!isOwn && (
+        <ActionBtn onClick={onReport} title="Report message" danger>
+          <Flag size={12} />
+        </ActionBtn>
       )}
       {isOwn && (
         <>
-          <button onClick={onEdit} title="Edit"
-            className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] hover:border-[#D5D7DC] shadow-sm transition-colors">
-            <Edit3 size={12} />
-          </button>
-          <button onClick={onDelete} title="Delete"
-            className="w-7 h-7 rounded-lg bg-white border border-[#E3E5E8] flex items-center justify-center text-[#96989D] hover:text-[#E53935] hover:border-red-200 shadow-sm transition-colors">
-            <Trash2 size={12} />
-          </button>
+          <ActionBtn onClick={onEdit} title="Edit"><Edit3 size={12} /></ActionBtn>
+          <ActionBtn onClick={onDelete} title="Delete" danger><Trash2 size={12} /></ActionBtn>
         </>
       )}
     </div>
   )
 }
 
+function ActionBtn({ children, title, onClick, active, activeColor, danger, className }) {
+  return (
+    <button title={title} onClick={onClick}
+      className={clsx(
+        'w-7 h-7 rounded-lg border flex items-center justify-center shadow-sm transition-colors',
+        active && !danger && !activeColor ? 'bg-[#E53935]/10 border-[#E53935]/30 text-[#E53935]' :
+        active && activeColor ? `bg-white/[0.06] border-white/[0.08] ${activeColor}` :
+        danger ? 'bg-[#2B2D31] border-white/[0.08] text-[#6B6E75] hover:bg-[#E53935]/10 hover:text-[#E53935] hover:border-[#E53935]/30' :
+        'bg-[#2B2D31] border-white/[0.08] text-[#6B6E75] hover:text-[#DBDEE1] hover:border-white/[0.12]',
+        className
+      )}>
+      {children}
+    </button>
+  )
+}
+
 // ── Member list panel ─────────────────────────────────────────────────────────
 function MemberList({ members, onMemberClick }) {
-  const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#96989D' }
+  const statusColor = { online: '#23a55a', idle: '#f0b232', dnd: '#f23f43', offline: '#6B6E75' }
 
   if (!members?.length) return (
-    <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] py-4 shrink-0">
-      <div className="px-4 text-[#96989D] text-[10px] font-bold uppercase tracking-wider mb-3">Members — 0</div>
+    <div className="w-56 bg-[#2B2D31] border-l border-white/[0.06] py-4 shrink-0">
+      <div className="px-4 text-[#6B6E75] text-[10px] font-bold uppercase tracking-wider mb-3">Members — 0</div>
     </div>
   )
 
-  // Group by top non-default role first, then fallback to online/offline
   const online = members.filter(m => m.status !== 'offline')
   const offline = members.filter(m => m.status === 'offline')
 
-  // Build role groups from online members
   const roleGroups = {}
   const noRoleOnline = []
 
@@ -652,29 +634,25 @@ function MemberList({ members, onMemberClick }) {
   }
 
   const sections = [
-    ...Object.values(roleGroups).map(g => ({
-      label: g.role.name,
-      color: g.role.color,
-      members: g.members,
-    })),
+    ...Object.values(roleGroups).map(g => ({ label: g.role.name, color: g.role.color, members: g.members })),
     ...(noRoleOnline.length ? [{ label: `Online — ${noRoleOnline.length}`, color: null, members: noRoleOnline }] : []),
     ...(offline.length ? [{ label: `Offline — ${offline.length}`, color: null, members: offline }] : []),
   ]
 
   return (
-    <div className="w-56 bg-[#F7F8FA] border-l border-[#E3E5E8] overflow-y-auto scrollable py-3 shrink-0">
+    <div className="w-56 bg-[#2B2D31] border-l border-white/[0.06] overflow-y-auto scrollable py-3 shrink-0">
       {sections.map(section => (
         <div key={section.label} className="mb-4 px-3">
           <div className="flex items-center gap-1.5 mb-2 px-1">
             {section.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: section.color }} />}
-            <span className="text-[9px] font-bold uppercase tracking-widest text-[#96989D]">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-[#6B6E75]">
               {section.label} {!section.label.includes('—') && `— ${section.members.length}`}
             </span>
           </div>
           {section.members.map(m => (
             <div key={m.id}
               onClick={e => onMemberClick(m, e)}
-              className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-[#EAEBEE] cursor-pointer transition-colors">
+              className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/[0.06] cursor-pointer transition-colors">
               <div className="relative shrink-0">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs overflow-hidden"
                   style={{ background: m.avatarUrl ? undefined : (m.avatarColor || avatarColor(m.username)) }}>
@@ -682,11 +660,11 @@ function MemberList({ members, onMemberClick }) {
                     ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
                     : m.username?.[0]?.toUpperCase()}
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#F7F8FA]"
-                  style={{ background: statusColor[m.status] ?? '#96989D' }} />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#2B2D31]"
+                  style={{ background: statusColor[m.status] ?? '#6B6E75' }} />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-[#5C6068] truncate">{m.displayName ?? m.username}</div>
+                <div className="text-sm font-medium text-[#949BA4] hover:text-[#DBDEE1] truncate transition-colors">{m.displayName ?? m.username}</div>
                 {m.gameActivity ? (
                   <div className="flex items-center gap-0.5 text-[10px] font-medium text-[#23a55a] truncate">
                     <Gamepad2 size={9} className="shrink-0" />
@@ -703,6 +681,83 @@ function MemberList({ members, onMemberClick }) {
           ))}
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Report Modal ──────────────────────────────────────────────────────────────
+const REPORT_REASONS = [
+  'Harassment or bullying',
+  'Spam or scam',
+  'Hate speech',
+  'Inappropriate content',
+  'Threats or violence',
+  'Other',
+]
+
+function ReportModal({ msg, onClose }) {
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const submit = async () => {
+    if (!reason) return
+    setSubmitting(true)
+    try {
+      await api.reportMessage(msg.id, reason)
+      setDone(true)
+      setTimeout(onClose, 1500)
+    } catch (_) {}
+    setSubmitting(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4" onClick={onClose}>
+      <div className="bg-[#2B2D31] rounded-2xl shadow-2xl border border-white/[0.08] w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-white/[0.06] flex items-center justify-between">
+          <div>
+            <h2 className="font-black text-white text-base">Report Message</h2>
+            <p className="text-[#6B6E75] text-xs mt-0.5">Help us understand what's wrong.</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-white/[0.08] flex items-center justify-center text-[#6B6E75] hover:text-[#DBDEE1] transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+        {done ? (
+          <div className="p-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#23a55a]/10 border border-[#23a55a]/20 flex items-center justify-center mx-auto mb-3">
+              <Check size={20} className="text-[#23a55a]" />
+            </div>
+            <p className="text-white font-bold">Thanks for reporting.</p>
+            <p className="text-[#6B6E75] text-sm mt-1">Our team will review it shortly.</p>
+          </div>
+        ) : (
+          <div className="p-5">
+            <div className="bg-[#1E1F22] rounded-xl p-3 mb-4 border border-white/[0.06]">
+              <p className="text-[#6B6E75] text-[10px] font-bold uppercase tracking-wider mb-1">Message</p>
+              <p className="text-[#949BA4] text-xs leading-relaxed line-clamp-2">{msg.content}</p>
+            </div>
+            <p className="text-[#949BA4] text-xs font-semibold mb-2">Why are you reporting this?</p>
+            <div className="space-y-1.5 mb-4">
+              {REPORT_REASONS.map(r => (
+                <button key={r} onClick={() => setReason(r)}
+                  className={clsx(
+                    'w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors border',
+                    reason === r
+                      ? 'bg-[#E53935]/10 border-[#E53935]/30 text-white'
+                      : 'bg-white/[0.04] border-white/[0.06] text-[#949BA4] hover:bg-white/[0.08] hover:text-[#DBDEE1]'
+                  )}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <button onClick={submit} disabled={!reason || submitting}
+              className="w-full bg-[#E53935] hover:bg-[#C62828] disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors text-sm">
+              {submitting ? 'Submitting…' : 'Submit Report'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
