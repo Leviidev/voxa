@@ -10,7 +10,6 @@
     "dist": "electron-builder --mac",
     "dist:dmg": "electron-builder --mac dmg"
   },
-  "dependencies": {},
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
@@ -29,20 +28,17 @@
     ],
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
       "category": "public.app-category.social-networking",
       "minimumSystemVersion": "13.0",
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "identity": null
     },
     "dmg": {
       "title": "Voxa",
       "artifactName": "Voxa-${version}.dmg",
-      "window": {
-        "width": 540,
-        "height": 380
-      },
+      "window": { "width": 540, "height": 380 },
       "contents": [
         { "x": 150, "y": 185, "type": "file" },
         { "x": 390, "y": 185, "type": "link", "path": "/Applications" }

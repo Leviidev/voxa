@@ -1,11 +1,14 @@
 const { app, BrowserWindow, ipcMain, Menu, Tray, shell, dialog } = require('electron')
 const { exec, execFile } = require('child_process')
-const { createHash, createReadStream: fsCreateReadStream } = require('crypto')
+const { createHash } = require('crypto')
 const path = require('path')
 const https = require('https')
 const http = require('http')
 const fs = require('fs')
 const os = require('os')
+
+// ── Single instance ───────────────────────────────────────────────────────────
+if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const VOXA_URL = process.env.VOXA_URL || 'https://voxa.lol'
@@ -31,10 +34,14 @@ const GAMES = [
   { name: 'Destiny 2',                exe: 'destiny2.exe' },
   { name: 'Titanfall 2',              exe: 'Titanfall2.exe' },
   { name: 'Paladins',                 exe: 'Paladins.exe' },
+  { name: 'Hunt: Showdown',           exe: 'HuntGame.exe' },
+  { name: 'Escape from Tarkov',       exe: 'EscapeFromTarkov.exe' },
+  { name: 'The Finals',               exe: 'Discovery.exe' },
   // MOBAs
   { name: 'League of Legends',        exe: 'League of Legends.exe' },
   { name: 'Dota 2',                   exe: 'dota2.exe' },
   { name: 'Smite',                    exe: 'Smite.exe' },
+  { name: 'Heroes of the Storm',      exe: 'HeroesOfTheStorm.exe' },
   // Sports
   { name: 'Rocket League',            exe: 'RocketLeague.exe' },
   { name: 'EA FC 25',                 exe: 'EASFC25.exe' },
@@ -49,6 +56,9 @@ const GAMES = [
   { name: 'ARK',                      exe: 'ShooterGame.exe' },
   { name: '7 Days to Die',            exe: '7DaysToDie.exe' },
   { name: 'Subnautica',               exe: 'Subnautica.exe' },
+  { name: 'The Forest',               exe: 'TheForest.exe' },
+  { name: 'Sons of the Forest',       exe: 'SonsOfTheForest.exe' },
+  { name: 'No Man\'s Sky',            exe: 'NMS.exe' },
   // Social / Party
   { name: 'Among Us',                 exe: 'Among Us.exe' },
   { name: 'Fall Guys',                exe: 'FallGuys_client_game.exe' },
@@ -56,6 +66,7 @@ const GAMES = [
   { name: 'Phasmophobia',             exe: 'Phasmophobia.exe' },
   { name: 'Lethal Company',           exe: 'Lethal Company.exe' },
   { name: 'Content Warning',          exe: 'Content Warning.exe' },
+  { name: 'Buckshot Roulette',        exe: 'Buckshot Roulette.exe' },
   // RPG / Action
   { name: 'Elden Ring',               exe: 'eldenring.exe' },
   { name: 'Cyberpunk 2077',           exe: 'Cyberpunk2077.exe' },
@@ -68,14 +79,18 @@ const GAMES = [
   { name: 'Dead by Daylight',         exe: 'DeadByDaylight-Win64-Shipping.exe' },
   { name: 'Warframe',                 exe: 'Warframe.x64.exe' },
   { name: 'Monster Hunter: World',    exe: 'MonsterHunterWorld.exe' },
+  { name: 'Monster Hunter Wilds',     exe: 'MonsterHunterWilds.exe' },
   { name: 'Dark Souls III',           exe: 'DarkSoulsIII.exe' },
   { name: 'Sekiro',                   exe: 'sekiro.exe' },
   { name: 'Baldur\'s Gate 3',         exe: 'bg3.exe' },
   { name: 'Hades',                    exe: 'Hades.exe' },
   { name: 'Hades II',                 exe: 'Hades2.exe' },
   { name: 'Path of Exile',            exe: 'PathOfExile.exe' },
+  { name: 'Path of Exile 2',          exe: 'PathOfExile2.exe' },
   { name: 'Diablo IV',                exe: 'Diablo IV.exe' },
   { name: 'Palworld',                 exe: 'Palworld.exe' },
+  { name: 'Black Myth: Wukong',       exe: 'b1.exe' },
+  { name: 'Warhammer 40K: Space Marine 2', exe: 'SpaceMarine2.exe' },
   // Platformer
   { name: 'Geometry Dash',            exe: 'GeometryDash.exe' },
   { name: 'Celeste',                  exe: 'Celeste.exe' },
@@ -115,17 +130,14 @@ function getUpdateStatePath() {
 
 function loadUpdateState() {
   try {
-    const raw = fs.readFileSync(getUpdateStatePath(), 'utf8')
-    return JSON.parse(raw)
+    return JSON.parse(fs.readFileSync(getUpdateStatePath(), 'utf8'))
   } catch {
     return { installedSha256: null }
   }
 }
 
 function saveUpdateState(state) {
-  try {
-    fs.writeFileSync(getUpdateStatePath(), JSON.stringify(state), 'utf8')
-  } catch (_) {}
+  try { fs.writeFileSync(getUpdateStatePath(), JSON.stringify(state), 'utf8') } catch (_) {}
 }
 
 function fetchJson(url) {
@@ -148,17 +160,12 @@ function downloadFile(url, destPath, onProgress) {
     const file = fs.createWriteStream(destPath)
     let downloaded = 0
     let total = 0
-
     lib.get(url, { timeout: 0 }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        file.close()
-        fs.unlink(destPath, () => {})
+        file.close(); fs.unlink(destPath, () => {})
         return downloadFile(res.headers.location, destPath, onProgress).then(resolve).catch(reject)
       }
-      if (res.statusCode !== 200) {
-        file.close()
-        return reject(new Error(`HTTP ${res.statusCode}`))
-      }
+      if (res.statusCode !== 200) { file.close(); return reject(new Error(`HTTP ${res.statusCode}`)) }
       total = parseInt(res.headers['content-length'] || '0', 10)
       res.on('data', chunk => {
         downloaded += chunk.length
@@ -183,22 +190,13 @@ function sha256File(filePath) {
 
 async function checkForUpdates() {
   if (!app.isPackaged) return
-
   try {
     const info = await fetchJson(`${API_BASE}/api/releases/windows/latest`)
     if (!info?.sha256) return
-
     const state = loadUpdateState()
-
-    // First run — record the current sha256 as "installed" so we don't update immediately
-    if (!state.installedSha256) {
-      saveUpdateState({ installedSha256: info.sha256 })
-      return
-    }
-
+    if (!state.installedSha256) { saveUpdateState({ installedSha256: info.sha256 }); return }
     if (info.sha256 === state.installedSha256) return
 
-    // New version available — download it
     console.log('[updater] New version detected, downloading…')
     showTrayBalloon('Voxa Update Available', 'Downloading update in the background…')
     updateTray()
@@ -208,7 +206,6 @@ async function checkForUpdates() {
       if (pct % 25 === 0) console.log(`[updater] Download ${pct}%`)
     })
 
-    // Verify SHA-256 integrity
     const downloadedSha256 = await sha256File(tmpPath)
     if (downloadedSha256 !== info.sha256) {
       fs.unlink(tmpPath, () => {})
@@ -216,7 +213,6 @@ async function checkForUpdates() {
       return
     }
 
-    // Update is ready
     pendingInstallerPath = tmpPath
     pendingVersion = info.version || null
     updateReady = true
@@ -232,9 +228,7 @@ async function checkForUpdates() {
 
 function applyUpdate() {
   if (!pendingInstallerPath || !fs.existsSync(pendingInstallerPath)) return
-
   const installer = pendingInstallerPath
-
   dialog.showMessageBox({
     type: 'info',
     title: 'Restart to Update',
@@ -244,8 +238,6 @@ function applyUpdate() {
     defaultId: 0,
   }).then(({ response }) => {
     if (response !== 0) return
-
-    // Record new sha256 BEFORE quitting so the next launch knows it's installed
     sha256File(installer).then(hash => {
       saveUpdateState({ installedSha256: hash })
       app.isQuitting = true
@@ -274,29 +266,42 @@ function showTrayBalloon(title, content) {
 }
 
 // ── Game Detection ────────────────────────────────────────────────────────────
+
+// Returns [{name, cmdline}] — cmdline is empty on Windows (tasklist doesn't expose it)
+// but populated on macOS/Linux so cmdContains works there too.
 function getRunningProcesses() {
   return new Promise((resolve) => {
     if (process.platform === 'win32') {
       exec('tasklist /FO CSV /NH', { timeout: 8000 }, (err, stdout) => {
         if (err) return resolve([])
-        const procs = stdout.split('\n')
-          .map(line => { const m = line.match(/^"([^"]+)"/); return m ? m[1].toLowerCase() : null })
-          .filter(Boolean)
+        const procs = stdout.split('\n').map(line => {
+          const m = line.match(/^"([^"]+)"/)
+          return m ? { name: m[1].toLowerCase(), cmdline: '' } : null
+        }).filter(Boolean)
         resolve(procs)
       })
     } else {
-      exec('ps -eo comm', { timeout: 8000 }, (err, stdout) => {
+      exec('ps -eo comm=,args=', { timeout: 8000 }, (err, stdout) => {
         if (err) return resolve([])
-        resolve(stdout.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean))
+        const procs = stdout.split('\n').map(line => {
+          const sp = line.indexOf(' ')
+          return sp === -1
+            ? { name: line.trim().toLowerCase(), cmdline: '' }
+            : { name: line.slice(0, sp).trim().toLowerCase(), cmdline: line.slice(sp + 1).trim().toLowerCase() }
+        }).filter(p => p.name)
+        resolve(procs)
       })
     }
   })
 }
 
 function detectGame(procs) {
-  const procSet = new Set(procs)
   for (const game of GAMES) {
-    if (procSet.has(game.exe.toLowerCase())) return game.name
+    const exeLower = game.exe.toLowerCase()
+    const match = procs.find(p => p.name === exeLower)
+    if (!match) continue
+    if (game.cmdContains && !match.cmdline.includes(game.cmdContains.toLowerCase())) continue
+    return game.name
   }
   return null
 }
@@ -366,7 +371,7 @@ function updateTray() {
     menu.push({ type: 'separator' })
   }
 
-  menu.push({ label: 'Quit', click: () => app.quit() })
+  menu.push({ label: 'Quit', click: () => { app.isQuitting = true; app.quit() } })
   tray.setContextMenu(Menu.buildFromTemplate(menu))
 }
 
@@ -406,11 +411,7 @@ ipcMain.on('auth:logout', () => {
   if (currentGame) { reportActivity(null).catch(() => {}); currentGame = null; updateTray() }
   stopPolling()
 })
-
-ipcMain.on('app:open', () => {
-  if (mainWindow) mainWindow.loadURL(VOXA_URL)
-})
-
+ipcMain.on('app:open', () => { if (mainWindow) mainWindow.loadURL(VOXA_URL) })
 ipcMain.on('window:control', (_event, action) => {
   if (!mainWindow) return
   if (action === 'close')    mainWindow.hide()
@@ -419,6 +420,10 @@ ipcMain.on('window:control', (_event, action) => {
 })
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
+app.on('second-instance', () => {
+  if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus() }
+})
+
 app.whenReady().then(() => {
   createWindow()
   try { createTray() } catch (_) {}

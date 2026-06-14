@@ -1,0 +1,50 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['linux/**']
+
+jobs:
+  build:
+    name: Build AppImage + deb
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fakeroot dpkg rpm
+
+      - name: Install dependencies
+        working-directory: linux
+        run: npm install
+
+      - name: Build Linux packages
+        working-directory: linux
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voxa-Linux-AppImage-${{ github.sha }}
+          path: linux/dist/*.AppImage
+          retention-days: 30
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voxa-Linux-deb-${{ github.sha }}
+          path: linux/dist/*.deb
+          retention-days: 30

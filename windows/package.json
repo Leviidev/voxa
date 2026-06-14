@@ -10,9 +10,6 @@
     "dist": "electron-builder --win",
     "dist:portable": "electron-builder --win portable"
   },
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3"
@@ -27,7 +24,6 @@
     "files": [
       "main.js",
       "preload.js",
-      "landing.html",
       "assets/**"
     ],
     "win": {

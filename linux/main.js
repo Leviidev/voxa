@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, Menu, Tray, shell, dialog, Notification } = require('electron')
-const { exec } = require('child_process')
+const { exec, spawn } = require('child_process')
 const { createHash } = require('crypto')
 const path = require('path')
 const https = require('https')
@@ -16,56 +16,53 @@ const API_BASE = process.env.API_URL || 'https://voxa.lol'
 const POLL_INTERVAL = 10_000
 const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000
 
-// ── Game Database (macOS process names) ───────────────────────────────────────
-// On macOS, process names come from `ps -eo comm=` (comm field, up to 16 chars).
-// For processes where the comm is ambiguous (e.g. "java"), cmdContains checks
-// the full command-line args returned by `ps -eo comm=,args=`.
+// ── Game Database (Linux process names) ───────────────────────────────────────
+// Linux process names from `ps -eo comm=`. On Linux, comm is truncated to 15 chars
+// by the kernel; args= gives the full path for cmdContains disambiguation.
 const GAMES = [
   // Battle Royale
-  { name: 'Fortnite',                  exe: 'FortniteMac-Shipping' },
   { name: 'Apex Legends',             exe: 'r5apex' },
+  { name: 'PUBG',                     exe: 'tslgame' },
   // FPS
   { name: 'CS2',                      exe: 'cs2' },
-  { name: 'CS:GO',                    exe: 'csgo_osx64' },
-  { name: 'Valorant',                 exe: 'valorant' },
-  { name: 'Overwatch 2',              exe: 'Overwatch' },
+  { name: 'CS:GO',                    exe: 'csgo_linux64' },
   { name: 'Destiny 2',                exe: 'destiny2' },
   // MOBAs
-  { name: 'League of Legends',        exe: 'LeagueofLegends' },
   { name: 'Dota 2',                   exe: 'dota2' },
   // Sports
   { name: 'Rocket League',            exe: 'RocketLeague' },
   // Survival / Sandbox
   { name: 'Minecraft: Java Edition',  exe: 'java', cmdContains: 'minecraft' },
-  { name: 'Minecraft: Java Edition',  exe: 'java_home_runner', cmdContains: 'minecraft' },
   { name: 'Valheim',                  exe: 'valheim.x86_64' },
   { name: 'Terraria',                 exe: 'Terraria' },
   { name: 'Subnautica',               exe: 'Subnautica' },
   { name: 'Stardew Valley',           exe: 'StardewValley' },
-  { name: 'No Man\'s Sky',            exe: 'NMS' },
+  { name: 'No Man\'s Sky',            exe: 'NMS.x86_64' },
+  { name: 'The Forest',               exe: 'TheForest' },
   // Social / Party
   { name: 'Among Us',                 exe: 'Among Us' },
-  { name: 'Roblox',                   exe: 'RobloxPlayer' },
   { name: 'Phasmophobia',             exe: 'Phasmophobia' },
+  { name: 'Lethal Company',           exe: 'Lethal Company' },
   // RPG / Action
-  { name: 'GTA V',                    exe: 'GTA5' },
-  { name: 'The Witcher 3',            exe: 'witcher3' },
-  { name: 'Hollow Knight',            exe: 'Hollow Knight' },
+  { name: 'Hollow Knight',            exe: 'hollow_knight' },
   { name: 'Genshin Impact',           exe: 'GenshinImpact' },
-  { name: 'Warframe',                 exe: 'Warframe' },
+  { name: 'Warframe',                 exe: 'Warframe.x86_64' },
   { name: 'Baldur\'s Gate 3',         exe: 'bg3' },
   { name: 'Hades',                    exe: 'Hades' },
   { name: 'Hades II',                 exe: 'Hades2' },
   { name: 'Path of Exile',            exe: 'PathOfExile' },
-  { name: 'Palworld',                 exe: 'Palworld' },
+  { name: 'Dead by Daylight',         exe: 'DeadByDaylight' },
+  { name: 'Elden Ring',               exe: 'eldenring' },
   // Platformer
   { name: 'Celeste',                  exe: 'Celeste' },
   { name: 'Cuphead',                  exe: 'Cuphead' },
   // Strategy
-  { name: 'StarCraft II',             exe: 'SC2' },
+  { name: 'StarCraft II',             exe: 'SC2_x64' },
   { name: 'Civilization VI',          exe: 'CivilizationVI' },
-  // Fighting
-  { name: 'Street Fighter 6',         exe: 'StreetFighter6' },
+  // Other
+  { name: 'Factorio',                 exe: 'factorio' },
+  { name: 'RimWorld',                 exe: 'RimWorldLinux' },
+  { name: 'Dwarf Fortress',           exe: 'dwarfort' },
 ]
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -75,7 +72,7 @@ let authToken = null
 let currentGame = null
 let pollTimer = null
 let updateReady = false
-let pendingDmgPath = null
+let pendingAppImagePath = null
 let pendingVersion = null
 
 // ── Custom Updater ────────────────────────────────────────────────────────────
@@ -144,7 +141,7 @@ function sha256File(filePath) {
 async function checkForUpdates() {
   if (!app.isPackaged) return
   try {
-    const info = await fetchJson(`${API_BASE}/api/releases/macos/latest`)
+    const info = await fetchJson(`${API_BASE}/api/releases/linux/latest`)
     if (!info?.sha256) return
     const state = loadUpdateState()
     if (!state.installedSha256) { saveUpdateState({ installedSha256: info.sha256 }); return }
@@ -154,7 +151,7 @@ async function checkForUpdates() {
     showNotification('Voxa Update Available', 'Downloading update in the background…')
     updateTray()
 
-    const tmpPath = path.join(os.tmpdir(), `voxa-update-${Date.now()}.dmg`)
+    const tmpPath = path.join(os.tmpdir(), `voxa-update-${Date.now()}.AppImage`)
     await downloadFile(info.url, tmpPath, (pct) => {
       if (pct % 25 === 0) console.log(`[updater] Download ${pct}%`)
     })
@@ -166,28 +163,37 @@ async function checkForUpdates() {
       return
     }
 
-    pendingDmgPath = tmpPath
+    pendingAppImagePath = tmpPath
     pendingVersion = info.version || null
     updateReady = true
     updateTray()
-    showNotification('Voxa Update Ready', `${pendingVersion ? `v${pendingVersion} ` : ''}ready to install.`)
+    showNotification('Voxa Update Ready', `${pendingVersion ? `v${pendingVersion} ` : ''}ready. Click to install.`)
   } catch (err) {
     console.error('[updater] Check failed:', err.message)
   }
 }
 
 function applyUpdate() {
-  if (!pendingDmgPath || !fs.existsSync(pendingDmgPath)) return
+  if (!pendingAppImagePath || !fs.existsSync(pendingAppImagePath)) return
   dialog.showMessageBox({
     type: 'info',
     title: 'Install Update',
-    message: `Voxa ${pendingVersion ? `v${pendingVersion} ` : ''}is ready to install.`,
-    detail: 'The DMG will open. Drag Voxa to Applications, then relaunch.',
-    buttons: ['Open Installer', 'Later'],
+    message: `Voxa ${pendingVersion ? `v${pendingVersion} ` : ''}is ready.`,
+    detail: 'Voxa will restart using the new version.',
+    buttons: ['Restart & Update', 'Later'],
     defaultId: 0,
   }).then(({ response }) => {
     if (response !== 0) return
-    exec(`open "${pendingDmgPath}"`)
+    try {
+      // Make the new AppImage executable, launch it, then quit this instance
+      fs.chmodSync(pendingAppImagePath, 0o755)
+      saveUpdateState({ installedSha256: null }) // force re-record on next launch
+      app.isQuitting = true
+      spawn(pendingAppImagePath, [], { detached: true, stdio: 'ignore' }).unref()
+      app.quit()
+    } catch (err) {
+      dialog.showErrorBox('Update failed', err.message)
+    }
   })
 }
 
@@ -207,9 +213,8 @@ function showNotification(title, body) {
 
 // ── Game Detection ────────────────────────────────────────────────────────────
 
-// Uses `ps -eo comm=,args=` to get both the process name and full command line.
-// comm= (with =) suppresses the header. The name is the first token on each line;
-// everything after the first space is the command-line args used for cmdContains checks.
+// Linux: `ps -eo comm=,args=`
+// On Linux, comm is kernel-truncated to 15 chars; args= gives the full invocation.
 function getRunningProcesses() {
   return new Promise((resolve) => {
     exec('ps -eo comm=,args=', { timeout: 8000 }, (err, stdout) => {
@@ -291,10 +296,10 @@ function updateTray() {
     { type: 'separator' },
   ]
   if (updateReady) {
-    menu.push({ label: `⬆️  Install Update${pendingVersion ? ` v${pendingVersion}` : ''}`, click: applyUpdate })
+    menu.push({ label: `⬆️  Restart & Update${pendingVersion ? ` v${pendingVersion}` : ''}`, click: applyUpdate })
     menu.push({ type: 'separator' })
   }
-  menu.push({ label: 'Quit Voxa', click: () => { app.isQuitting = true; app.quit() } })
+  menu.push({ label: 'Quit', click: () => { app.isQuitting = true; app.quit() } })
   tray.setContextMenu(Menu.buildFromTemplate(menu))
   tray.setToolTip(currentGame ? `Playing ${currentGame}` : 'Voxa')
 }
@@ -307,7 +312,9 @@ function createTray() {
       if (mainWindow) mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
     })
     updateTray()
-  } catch (_) {}
+  } catch (_) {
+    // Tray is optional — some Linux DEs don't support it without extra packages
+  }
 }
 
 // ── Main Window ───────────────────────────────────────────────────────────────
@@ -319,8 +326,7 @@ function createWindow() {
     minHeight: 600,
     title: 'Voxa',
     backgroundColor: '#111214',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 14, y: 10 },
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -341,6 +347,12 @@ ipcMain.on('auth:logout', () => {
   stopPolling()
 })
 ipcMain.on('app:open', () => { if (mainWindow) mainWindow.loadURL(VOXA_URL) })
+ipcMain.on('window:control', (_event, action) => {
+  if (!mainWindow) return
+  if (action === 'close')    mainWindow.hide()
+  if (action === 'minimize') mainWindow.minimize()
+  if (action === 'maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+})
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
 app.on('second-instance', () => {
@@ -351,10 +363,7 @@ app.whenReady().then(() => {
   createWindow()
   try { createTray() } catch (_) {}
   setupAutoUpdater()
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    else if (mainWindow) mainWindow.show()
-  })
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 
 app.on('before-quit', async () => {
@@ -363,6 +372,4 @@ app.on('before-quit', async () => {
   if (authToken && currentGame) await reportActivity(null).catch(() => {})
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+app.on('window-all-closed', () => app.quit())
