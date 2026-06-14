@@ -1208,13 +1208,21 @@ pool.query(`
   )
 `).catch(err => console.error('releases table init failed:', err.message))
 
-export async function createRelease({ platform, filename, sha256, sizeBytes, version, notes, uploadedBy }) {
+export async function createRelease({ platform, filename, sha256, sizeBytes, version, notes, uploadedBy, fileData }) {
   const { rows } = await pool.query(
-    `INSERT INTO releases (platform, filename, sha256, size_bytes, version, notes, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [platform, filename, sha256, sizeBytes ?? null, version ?? null, notes ?? null, uploadedBy ?? null]
+    `INSERT INTO releases (platform, filename, sha256, size_bytes, version, notes, uploaded_by, file_data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, platform, filename, sha256, size_bytes, version, notes, uploaded_by, uploaded_at`,
+    [platform, filename, sha256, sizeBytes ?? null, version ?? null, notes ?? null, uploadedBy ?? null, fileData ?? null]
   )
   return rows[0]
+}
+
+export async function getReleaseFileData(platform) {
+  const { rows } = await pool.query(
+    `SELECT file_data FROM releases WHERE platform = $1 AND file_data IS NOT NULL ORDER BY uploaded_at DESC LIMIT 1`,
+    [platform]
+  )
+  return rows[0]?.file_data ?? null
 }
 
 export async function getLatestRelease(platform = 'windows') {

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createReadStream, existsSync, mkdirSync } from 'fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs'
 import { createHash } from 'crypto'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -127,15 +127,19 @@ router.get('/releases', async (req, res) => {
 })
 
 router.post('/releases/upload', upload.single('file'), async (req, res) => {
+  let filePath = null
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
     const platform = req.body?.platform || 'windows'
     if (!PLATFORM_FILES[platform]) return res.status(400).json({ error: 'Invalid platform' })
     const cfg = PLATFORM_FILES[platform]
 
-    const filePath = req.file.path
+    filePath = req.file.path
     const sha256 = await sha256File(filePath)
     const { version, notes } = req.body
+
+    // Read the file into a buffer so it can be stored in the database permanently
+    const fileData = readFileSync(filePath)
 
     const release = await createRelease({
       platform,
@@ -145,7 +149,12 @@ router.post('/releases/upload', upload.single('file'), async (req, res) => {
       version: version?.trim() || null,
       notes: notes?.trim() || null,
       uploadedBy: null,
+      fileData,
     })
+
+    // Clean up the temp file from disk — the DB is the source of truth now
+    try { unlinkSync(filePath) } catch (_) {}
+    filePath = null
 
     res.json({
       id: release.id,
@@ -157,6 +166,7 @@ router.post('/releases/upload', upload.single('file'), async (req, res) => {
       platform,
     })
   } catch (err) {
+    if (filePath) try { unlinkSync(filePath) } catch (_) {}
     res.status(500).json({ error: err.message })
   }
 })

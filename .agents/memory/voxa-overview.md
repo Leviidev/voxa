@@ -71,19 +71,29 @@ Configured as **VM** (not static, not autoscale) — required for WebSocket pers
 
 ## Admin Dashboard + Release System
 
-- `releases` table: `id, platform, filename, sha256, size_bytes, version, notes, uploaded_at, uploaded_by TEXT → users.id`
-- Upload files stored at `website/uploads/releases/windows_x64.exe` (always overwrites — only one live build)
-- DB functions: `createRelease()`, `getLatestRelease(platform)`, `getReleaseHistory(platform, limit)` in `db.js`
-- `website/server/routes/admin.js` — protected by `requireAuth` + `requireAdmin` (checks `ADMIN_EMAILS` env var, comma-separated emails)
-  - `GET /api/admin/status` — returns `{ admin: true }` or 403
+- `releases` table: `id, platform, filename, sha256, size_bytes, version, notes, uploaded_at, uploaded_by TEXT → users.id, file_data BYTEA`
+- **Release files stored in DB as BYTEA** (not filesystem — filesystem is ephemeral in production). `file_data` column added via `ALTER TABLE releases ADD COLUMN IF NOT EXISTS file_data BYTEA`.
+- DB functions: `createRelease({ ..., fileData })`, `getLatestRelease(platform)`, `getReleaseFileData(platform)`, `getReleaseHistory(platform, limit)` in `db.js`
+- Upload flow: multer writes temp file → `readFileSync` into buffer → stored in `releases.file_data` → temp file deleted
+- Download flow: `getReleaseFileData(platform)` → `res.send(buffer)` with correct Content-Type/Disposition headers
+- `website/server/routes/admin.js` — JWT admin auth (`JWT_SECRET + '_admin'`); requires `ADMIN_PASSWORD_HASH` env var
+  - `POST /api/admin/auth` — bcrypt verify, returns 8h admin JWT
   - `GET /api/admin/releases` — release history
-  - `POST /api/admin/releases/upload` — multer diskStorage, computes sha256 server-side, saves to DB
+  - `POST /api/admin/releases/upload` — multer + stores file_data in DB
 - `website/server/routes/releases.js` — public, mounted at both `/api/releases` and `/releases`
-  - `GET /api/releases/windows/latest` → `{ sha256, version, url, uploadedAt, sizeBytes }`
-  - `GET /releases/windows/windows_x64.exe` → serves the file (res.download)
-- Frontend admin page: `website/src/pages/Admin.jsx` at route `/admin` (top-level, outside AppLayout)
-  - Drag-and-drop or click-to-upload .exe; XHR with progress bar; shows current sha256, upload date, size; collapsible release history
-- **ADMIN_EMAILS must be set** as environment variable (comma-separated emails of admin users)
+  - `GET /api/releases/:platform/latest` → `{ sha256, version, url, uploadedAt, sizeBytes }`
+  - `GET /releases/:platform/:filename` → streams file from DB
+- Frontend admin page: `website/src/pages/Admin.jsx` at route `/admin`
+- **ADMIN_PASSWORD_HASH must be set** as environment secret (bcrypt hash of admin password)
+
+## macOS Electron App (macos/)
+
+- Entry: `macos/main.js`, `macos/preload.js`, `macos/package.json`
+- `titleBarStyle: 'hiddenInset'` + `trafficLightPosition` — uses native macOS traffic lights, no custom controls injected
+- Game detection: `ps -eo comm=` (macOS process names differ from Windows .exe names)
+- Auto-updater: downloads `.dmg`, verifies SHA-256, then calls `open` to mount it (user drags to Applications)
+- No tray balloons — uses `new Notification(...)` via Electron's Notification API
+- Build: `npm run dist` → universal DMG + ZIP for x64 + arm64 in `macos/dist/`
 
 ## Game Activity (backend + frontend)
 

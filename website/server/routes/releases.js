@@ -1,11 +1,5 @@
 import { Router } from 'express'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
-import { existsSync } from 'fs'
-import { getLatestRelease } from '../db.js'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const UPLOADS_DIR = join(__dirname, '../../uploads/releases')
+import { getLatestRelease, getReleaseFileData } from '../db.js'
 
 const router = Router()
 
@@ -23,6 +17,14 @@ const PLATFORM_DISPLAY = {
   macos: 'Voxa.dmg',
   linux: 'Voxa.AppImage',
   android: 'Voxa.apk',
+}
+
+const PLATFORM_MIME = {
+  windows: 'application/octet-stream',
+  ios: 'application/octet-stream',
+  macos: 'application/x-apple-diskimage',
+  linux: 'application/octet-stream',
+  android: 'application/vnd.android.package-archive',
 }
 
 function makeLatestRoute(platform) {
@@ -47,11 +49,21 @@ function makeLatestRoute(platform) {
 }
 
 function makeDownloadRoute(platform) {
-  return (req, res) => {
-    const filename = PLATFORM_FILES[platform]
-    const filePath = join(UPLOADS_DIR, filename)
-    if (!existsSync(filePath)) return res.status(404).json({ error: 'No release file uploaded yet' })
-    res.download(filePath, PLATFORM_DISPLAY[platform])
+  return async (req, res) => {
+    try {
+      const fileData = await getReleaseFileData(platform)
+      if (!fileData) return res.status(404).json({ error: 'No release file uploaded yet' })
+
+      const displayName = PLATFORM_DISPLAY[platform]
+      const mime = PLATFORM_MIME[platform]
+
+      res.setHeader('Content-Type', mime)
+      res.setHeader('Content-Disposition', `attachment; filename="${displayName}"`)
+      res.setHeader('Content-Length', fileData.length)
+      res.send(fileData)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
   }
 }
 
