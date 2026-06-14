@@ -393,7 +393,7 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
-  mainWindow.loadURL(VOXA_URL)
+  mainWindow.loadURL(VOXA_URL + '/voxa/me')
   mainWindow.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); mainWindow.hide() } })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })

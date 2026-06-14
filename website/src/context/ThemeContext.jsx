@@ -10,7 +10,7 @@ function darkenHex(hex, amount = 35) {
 }
 
 const DEFAULTS = {
-  theme: 'light',
+  theme: 'dark',
   accentColor: '#E53935',
   fontSize: 'medium',
   messageDisplay: 'cozy',

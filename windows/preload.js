@@ -13,58 +13,73 @@ contextBridge.exposeInMainWorld('electronVoxa', {
   platform: process.platform,
 })
 
-// Inject frameless window controls into every page
+// Inject Windows-style frameless controls (top-right, always on top)
 window.addEventListener('DOMContentLoaded', () => {
-  const bar = document.createElement('div')
-  bar.id = '_voxa_titlebar'
-  bar.style.cssText = [
+  // Drag region — full width, 32px tall, transparent
+  const dragBar = document.createElement('div')
+  dragBar.id = '_voxa_drag'
+  dragBar.style.cssText = [
     'position:fixed',
     'top:0',
     'left:0',
     'width:100%',
-    'height:38px',
+    'height:32px',
     'z-index:2147483647',
     '-webkit-app-region:drag',
     'pointer-events:none',
-    'display:flex',
-    'align-items:center',
-    'padding:0 12px',
   ].join(';')
+  document.body.appendChild(dragBar)
 
-  const btns = document.createElement('div')
-  btns.style.cssText = [
+  // Windows-style control buttons — top-right
+  const controls = document.createElement('div')
+  controls.id = '_voxa_controls'
+  controls.style.cssText = [
+    'position:fixed',
+    'top:0',
+    'right:0',
+    'z-index:2147483648',
     'display:flex',
-    'gap:8px',
+    'align-items:stretch',
     '-webkit-app-region:no-drag',
     'pointer-events:all',
+    'height:32px',
   ].join(';')
 
-  const specs = [
-    { color: '#FF5F57', action: 'close',    title: 'Close' },
-    { color: '#FEBC2E', action: 'minimize',  title: 'Minimize' },
-    { color: '#28C840', action: 'maximize',  title: 'Maximize' },
+  const btns = [
+    { label: '&#x2212;', action: 'minimize', hoverBg: 'rgba(255,255,255,0.1)', hoverColor: '#fff' },
+    { label: '&#x25A1;', action: 'maximize', hoverBg: 'rgba(255,255,255,0.1)', hoverColor: '#fff' },
+    { label: '&#x2715;', action: 'close',    hoverBg: '#E53935',               hoverColor: '#fff' },
   ]
 
-  specs.forEach(({ color, action, title }) => {
+  btns.forEach(({ label, action, hoverBg, hoverColor }) => {
     const btn = document.createElement('button')
-    btn.title = title
+    btn.innerHTML = label
     btn.style.cssText = [
-      `background:${color}`,
-      'width:12px',
-      'height:12px',
-      'border-radius:50%',
+      'background:transparent',
       'border:none',
+      'color:rgba(255,255,255,0.7)',
       'cursor:pointer',
+      'width:46px',
+      'height:32px',
+      'font-size:12px',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'transition:background 0.1s, color 0.1s',
       'padding:0',
-      'transition:filter 0.15s',
-      'flex-shrink:0',
+      'font-family:inherit',
     ].join(';')
-    btn.addEventListener('mouseenter', () => { btn.style.filter = 'brightness(0.8)' })
-    btn.addEventListener('mouseleave', () => { btn.style.filter = '' })
+    btn.addEventListener('mouseenter', () => {
+      btn.style.background = hoverBg
+      btn.style.color = hoverColor
+    })
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = 'transparent'
+      btn.style.color = 'rgba(255,255,255,0.7)'
+    })
     btn.addEventListener('click', () => ipcRenderer.send('window:control', action))
-    btns.appendChild(btn)
+    controls.appendChild(btn)
   })
 
-  bar.appendChild(btns)
-  document.body.appendChild(bar)
+  document.body.appendChild(controls)
 })

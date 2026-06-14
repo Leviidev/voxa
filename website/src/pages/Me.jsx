@@ -62,18 +62,6 @@ export default function Me() {
             <p className="text-[#96989D] text-xs max-w-[180px] leading-relaxed">When a friend is active, you'll see it here.</p>
           </div>
         </div>
-        {user && (
-          <div className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-[#1A1B1E] text-sm">Your profile</h3>
-              <button onClick={() => setShowEditProfile(true)}
-                className="flex items-center gap-1 text-xs text-[#5C6068] hover:text-[#1A1B1E] bg-[#F2F3F5] hover:bg-[#EAEBEE] px-2.5 py-1.5 rounded-lg transition-colors font-medium">
-                <Edit3 size={11} /> Edit
-              </button>
-            </div>
-            <ProfileCard user={user} />
-          </div>
-        )}
       </div>
     </div>
   )
