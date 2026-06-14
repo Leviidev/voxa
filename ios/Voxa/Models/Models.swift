@@ -311,3 +311,38 @@ extension Color {
         self.init(red: r, green: g, blue: b)
     }
 }
+
+// MARK: - Friends
+
+struct FriendUser: Codable, Identifiable {
+    let id: String
+    let username: String
+    let displayName: String?
+    let avatarUrl: String?
+    let avatarColor: String?
+    let discriminator: String
+    let status: String?
+
+    var effectiveName: String { displayName ?? username }
+    var statusEnum: UserStatus { UserStatus(rawValue: status ?? "offline") ?? .offline }
+
+    var swiftAvatarColor: Color {
+        if let hex = avatarColor { return Color(hex: hex) }
+        let colors: [Color] = [.red, .purple, .blue, .green, .orange, .teal]
+        return colors[abs(username.hashValue) % colors.count]
+    }
+}
+
+struct FriendRequest: Codable, Identifiable {
+    let id: String
+    let incoming: Bool
+    let user: FriendUser
+    let status: String
+    let createdAt: Date?
+}
+
+struct Friend: Codable {
+    let requestId: String
+    let user: FriendUser
+    let createdAt: Date?
+}

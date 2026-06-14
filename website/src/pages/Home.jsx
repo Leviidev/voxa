@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Hash, Mic, Shield, Zap, Download } from 'lucide-react'
+import { ArrowRight, Hash, Mic, Shield, Zap, Download, ChevronDown } from 'lucide-react'
 
 // ── Platform detection ────────────────────────────────────────────────────────
 function detectOS() {
@@ -49,36 +49,11 @@ function LinuxIcon({ size = 16 }) {
 }
 
 const PLATFORM_CONFIG = {
-  windows: {
-    label: 'Windows',
-    url: '/releases/windows/windows_x64.exe',
-    download: true,
-    icon: WindowsIcon,
-  },
-  ios: {
-    label: 'iOS',
-    url: '/releases/ios/voxa.ipa',
-    download: true,
-    icon: AppleIcon,
-  },
-  macos: {
-    label: 'macOS',
-    url: '/releases/macos/voxa.dmg',
-    download: true,
-    icon: AppleIcon,
-  },
-  linux: {
-    label: 'Linux',
-    url: '/releases/linux/voxa.AppImage',
-    download: true,
-    icon: LinuxIcon,
-  },
-  android: {
-    label: 'Android',
-    url: '/releases/android/voxa.apk',
-    download: true,
-    icon: AndroidIcon,
-  },
+  windows: { label: 'Windows', url: '/releases/windows/windows_x64.exe', download: true, icon: WindowsIcon },
+  ios:     { label: 'iOS',     url: '/releases/ios/voxa.ipa',            download: true, icon: AppleIcon },
+  macos:   { label: 'macOS',   url: '/releases/macos/voxa.dmg',          download: true, icon: AppleIcon },
+  linux:   { label: 'Linux',   url: '/releases/linux/voxa.AppImage',     download: true, icon: LinuxIcon },
+  android: { label: 'Android', url: '/releases/android/voxa.apk',        download: true, icon: AndroidIcon },
 }
 
 function useReleases() {
@@ -93,6 +68,131 @@ function useReleases() {
     })
   }, [])
   return releases
+}
+
+// ── Dropdown menu ─────────────────────────────────────────────────────────────
+function PlatformDropdown({ platforms, releases, isLight }) {
+  return (
+    <div className={`absolute z-50 top-full mt-1.5 right-0 rounded-xl overflow-hidden min-w-[200px] ${
+      isLight
+        ? 'bg-white border border-[#E3E5E8] shadow-lg shadow-black/8'
+        : 'bg-[#1A1B1E] border border-white/10 shadow-2xl shadow-black/30'
+    }`}>
+      <div className={`px-3 py-2 text-[10px] font-bold uppercase tracking-widest border-b ${
+        isLight ? 'text-[#96989D] border-[#F2F3F5]' : 'text-white/30 border-white/5'
+      }`}>
+        Other platforms
+      </div>
+      {platforms.map(([key, cfg]) => {
+        const Icon = cfg.icon
+        const rel = releases[key]
+        return (
+          <a key={key} href={cfg.url} download={cfg.download}
+            className={`flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+              isLight ? 'text-[#313439] hover:bg-[#F7F8FA]' : 'text-white/80 hover:bg-white/8'
+            }`}>
+            <Icon size={14} />
+            <span className="flex-1">{cfg.label}</span>
+            {rel?.version && (
+              <span className={`text-[10px] tabular-nums ${isLight ? 'text-[#96989D]' : 'text-white/35'}`}>
+                v{rel.version}
+              </span>
+            )}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Download button (split button with platform dropdown) ─────────────────────
+function DownloadButton({ os, releases, variant = 'light' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const isLight = variant === 'light'
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const cfg = PLATFORM_CONFIG[os]
+  const otherPlatforms = Object.entries(PLATFORM_CONFIG).filter(([key]) => key !== os)
+
+  // No detected OS — show generic dropdown trigger
+  if (!cfg) {
+    return (
+      <div className="relative" ref={ref}>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={`inline-flex items-center gap-2.5 font-semibold px-5 py-3 rounded-xl transition-all text-sm active:scale-[0.98] ${
+            isLight
+              ? 'bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#313439]'
+              : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
+          }`}
+        >
+          <Download size={15} />
+          Download
+          <ChevronDown size={13} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && (
+          <PlatformDropdown
+            platforms={Object.entries(PLATFORM_CONFIG)}
+            releases={releases}
+            isLight={isLight}
+          />
+        )}
+      </div>
+    )
+  }
+
+  const Icon = cfg.icon
+  const release = releases[os]
+  const divider = isLight ? 'border-[#D5D7DC]' : 'border-white/20'
+
+  return (
+    <div className="relative flex" ref={ref}>
+      {/* Primary download */}
+      <a
+        href={cfg.url}
+        download={cfg.download}
+        className={`inline-flex items-center gap-2.5 font-semibold px-5 py-3 rounded-l-xl transition-all text-sm active:scale-[0.98] ${
+          isLight
+            ? 'bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#313439]'
+            : 'bg-white/15 hover:bg-white/25 text-white border border-white/20 border-r-0'
+        }`}
+      >
+        <Icon size={15} />
+        Download for {cfg.label}
+        {release?.version && (
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+            isLight ? 'bg-[#E3E5E8] text-[#5C6068]' : 'bg-white/20 text-white/70'
+          }`}>
+            v{release.version}
+          </span>
+        )}
+      </a>
+
+      {/* Chevron to open dropdown */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`px-2.5 rounded-r-xl border-l transition-all ${
+          isLight
+            ? `bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#5C6068] ${divider}`
+            : `bg-white/15 hover:bg-white/25 text-white/70 border border-l-0 ${divider}`
+        }`}
+        aria-label="Other platforms"
+      >
+        <ChevronDown size={13} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && otherPlatforms.length > 0 && (
+        <PlatformDropdown platforms={otherPlatforms} releases={releases} isLight={isLight} />
+      )}
+    </div>
+  )
 }
 
 export default function Home() {
@@ -131,39 +231,6 @@ function Nav() {
         </div>
       </div>
     </nav>
-  )
-}
-
-function DownloadButton({ os, releases, variant = 'light' }) {
-  const cfg = PLATFORM_CONFIG[os]
-  const release = releases[os]
-
-  if (!cfg || (!release && os === 'unknown')) return null
-  if (!cfg) return null
-
-  const Icon = cfg.icon
-  const isLight = variant === 'light'
-
-  return (
-    <a
-      href={cfg.url}
-      download={cfg.download}
-      className={`inline-flex items-center gap-2.5 font-semibold px-5 py-3 rounded-xl transition-all text-sm active:scale-[0.98] ${
-        isLight
-          ? 'bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#313439]'
-          : 'bg-white/15 hover:bg-white/25 text-white border border-white/20'
-      }`}
-    >
-      <Icon size={15} />
-      Download for {cfg.label}
-      {release?.version && (
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-          isLight ? 'bg-[#E3E5E8] text-[#5C6068]' : 'bg-white/20 text-white/70'
-        }`}>
-          v{release.version}
-        </span>
-      )}
-    </a>
   )
 }
 

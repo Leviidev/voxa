@@ -5,7 +5,7 @@ description: Key architecture decisions, design system, and deployment notes for
 
 ## Architecture
 
-- **Monorepo**: `website/` (React+Vite frontend + Express API), `ios/` (Swift/SwiftUI — paused)
+- **Monorepo**: `website/` (React+Vite frontend + Express API), `ios/` (Swift/SwiftUI), `android/` (Kotlin/Compose), `windows/` (Electron)
 - **Frontend**: React + Vite, port 5000. Workflow: "Start application" → `cd website && npm run dev`
 - **API**: Express in `website/server/`, port 3001. Workflow: "API Server" → `cd website && npm run api`
 - **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`)
@@ -15,7 +15,9 @@ description: Key architecture decisions, design system, and deployment notes for
 
 ## Database Schema (PostgreSQL)
 
-Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `friend_requests`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`
+
+**friend_requests table:** `id TEXT PK, from_user_id TEXT REFERENCES users, to_user_id TEXT REFERENCES users, status TEXT CHECK('pending','accepted','declined'), created_at TIMESTAMPTZ, UNIQUE(from_user_id, to_user_id)`. Friendship = accepted friend request — no separate friendships table. Routes at `/api/friends/*` via `server/routes/friends.js`.
 - Snake_case columns in DB; camelCase in API responses (mapped in db.js)
 - All `db.js` functions return Promises — every route handler must `await` them
 

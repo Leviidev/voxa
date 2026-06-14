@@ -222,3 +222,37 @@ fun avatarColorForName(name: String): Long {
     )
     return palette[Math.abs(name.hashCode()) % palette.size]
 }
+
+// ---------------------------------------------------------------------------
+// Friends
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class FriendUser(
+    val id: String,
+    val username: String,
+    @SerialName("displayName") val displayName: String? = null,
+    @SerialName("avatarUrl") val avatarUrl: String? = null,
+    @SerialName("avatarColor") val avatarColor: String? = null,
+    val discriminator: String,
+    val status: String? = null,
+) {
+    val effectiveName get() = displayName ?: username
+    val avatarLetter get() = effectiveName.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+}
+
+@Serializable
+data class FriendRequest(
+    val id: String,
+    val incoming: Boolean,
+    val user: FriendUser,
+    val status: String,
+    @SerialName("createdAt") val createdAt: String? = null,
+)
+
+@Serializable
+data class Friend(
+    @SerialName("requestId") val requestId: String,
+    val user: FriendUser,
+    @SerialName("createdAt") val createdAt: String? = null,
+)

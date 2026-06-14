@@ -5,7 +5,14 @@ struct ChannelListView: View {
     @EnvironmentObject var servers: ServersViewModel
     @EnvironmentObject var auth: AuthViewModel
     @State private var showAddChannel = false
+    @State private var showSettings = false
     @State private var collapsedCategories: Set<String> = []
+
+    private var isOwner: Bool {
+        guard let userId = auth.user?.id else { return false }
+        return server.members.first(where: { $0.id == userId })?.isOwner == true
+            || server.ownerId == userId
+    }
 
     var body: some View {
         ZStack {
@@ -19,14 +26,27 @@ struct ChannelListView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(hex: "949BA4"))
+                    if isOwner {
+                        Button { showSettings = true } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(hex: "949BA4"))
+                        }
+                    } else {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(hex: "949BA4"))
+                    }
                 }
                 .padding(.horizontal, 16)
                 .frame(height: 48)
                 .background(Color(hex: "2B2D31"))
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                .sheet(isPresented: $showSettings) {
+                    ServerSettingsView(server: server)
+                        .environmentObject(servers)
+                        .environmentObject(auth)
+                }
 
                 Divider().background(Color.black.opacity(0.3))
 

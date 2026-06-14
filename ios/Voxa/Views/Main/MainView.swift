@@ -68,6 +68,15 @@ struct MainView: View {
             }
             .tabItem { Label("Messages", systemImage: "message.fill") }
 
+            // Friends tab
+            NavigationStack {
+                FriendsView()
+                    .navigationTitle("Friends")
+                    .navigationBarTitleDisplayMode(.large)
+                    .environmentObject(dms)
+            }
+            .tabItem { Label("Friends", systemImage: "person.2.fill") }
+
             // Profile tab
             NavigationStack {
                 ProfileView()

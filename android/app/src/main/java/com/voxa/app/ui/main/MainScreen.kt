@@ -29,12 +29,13 @@ import com.voxa.app.viewmodel.*
 // ──────────────────────────────────────────────
 
 sealed class BottomTab(val route: String, val icon: ImageVector, val label: String) {
-    object Servers  : BottomTab("servers",  Icons.Filled.Forum,   "Servers")
-    object Messages : BottomTab("messages", Icons.Filled.Message, "Messages")
-    object Profile  : BottomTab("profile",  Icons.Filled.Person,  "Profile")
+    object Servers  : BottomTab("servers",  Icons.Filled.Forum,       "Servers")
+    object Messages : BottomTab("messages", Icons.Filled.Message,     "Messages")
+    object Friends  : BottomTab("friends",  Icons.Filled.People,      "Friends")
+    object Profile  : BottomTab("profile",  Icons.Filled.Person,      "Profile")
 }
 
-val bottomTabs = listOf(BottomTab.Servers, BottomTab.Messages, BottomTab.Profile)
+val bottomTabs = listOf(BottomTab.Servers, BottomTab.Messages, BottomTab.Friends, BottomTab.Profile)
 
 // ──────────────────────────────────────────────
 // Main Screen
@@ -47,6 +48,7 @@ fun MainScreen(
     serversViewModel: ServersViewModel,
     chatViewModel: ChatViewModel,
     dmViewModel: DMViewModel,
+    friendsViewModel: com.voxa.app.viewmodel.FriendsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
 ) {
     val navController = rememberNavController()
     val currentBackStack by navController.currentBackStackEntryAsState()
@@ -134,6 +136,11 @@ fun MainScreen(
                 if (channel != null && user != null) {
                     DMChatScreen(channel, user!!, dmViewModel) { navController.popBackStack() }
                 }
+            }
+
+            // ── Friends ──────────────────────────────────────────
+            composable(BottomTab.Friends.route) {
+                FriendsScreen(vm = friendsViewModel)
             }
 
             // ── Profile ──────────────────────────────────────────

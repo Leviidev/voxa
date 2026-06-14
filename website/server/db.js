@@ -1285,3 +1285,109 @@ export async function getAdminStats() {
   `)
   return rows[0]
 }
+
+// ─── Friend Requests ─────────────────────────────────────────────────────────
+
+export async function sendFriendRequest(fromUserId, toUsername) {
+  const target = await pool.query(
+    'SELECT * FROM users WHERE lower(username) = lower($1)',
+    [toUsername]
+  )
+  if (target.rows.length === 0) throw Object.assign(new Error('User not found'), { status: 404 })
+  const toUser = target.rows[0]
+  if (toUser.id === fromUserId) throw Object.assign(new Error('Cannot add yourself'), { status: 400 })
+
+  const existing = await pool.query(
+    `SELECT id, status FROM friend_requests WHERE
+     (from_user_id = $1 AND to_user_id = $2) OR (from_user_id = $2 AND to_user_id = $1)`,
+    [fromUserId, toUser.id]
+  )
+  if (existing.rows.length > 0) {
+    const s = existing.rows[0].status
+    if (s === 'accepted') throw Object.assign(new Error('Already friends'), { status: 409 })
+    throw Object.assign(new Error('Friend request already sent'), { status: 409 })
+  }
+
+  const id = generateId('fr_')
+  await pool.query(
+    'INSERT INTO friend_requests (id, from_user_id, to_user_id, status) VALUES ($1,$2,$3,$4)',
+    [id, fromUserId, toUser.id, 'pending']
+  )
+  return { id, toUserId: toUser.id, username: toUser.username }
+}
+
+export async function getFriendRequests(userId) {
+  const { rows } = await pool.query(
+    `SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.status, fr.created_at,
+      u1.username as fu, u1.display_name as fdn, u1.avatar_url as fav, u1.avatar_color as fac, u1.discriminator as fdis,
+      u2.username as tu, u2.display_name as tdn, u2.avatar_url as tav, u2.avatar_color as tac, u2.discriminator as tdis
+     FROM friend_requests fr
+     JOIN users u1 ON fr.from_user_id = u1.id
+     JOIN users u2 ON fr.to_user_id = u2.id
+     WHERE (fr.from_user_id = $1 OR fr.to_user_id = $1) AND fr.status = 'pending'`,
+    [userId]
+  )
+  return rows.map(r => ({
+    id: r.id,
+    status: r.status,
+    createdAt: r.created_at,
+    incoming: r.to_user_id === userId,
+    user: r.to_user_id === userId
+      ? { id: r.from_user_id, username: r.fu, displayName: r.fdn, avatarUrl: r.fav, avatarColor: r.fac, discriminator: r.fdis }
+      : { id: r.to_user_id,   username: r.tu, displayName: r.tdn, avatarUrl: r.tav, avatarColor: r.tac, discriminator: r.tdis },
+  }))
+}
+
+export async function acceptFriendRequest(requestId, userId) {
+  const req = await pool.query('SELECT * FROM friend_requests WHERE id = $1', [requestId])
+  if (!req.rows.length) throw Object.assign(new Error('Request not found'), { status: 404 })
+  const r = req.rows[0]
+  if (r.to_user_id !== userId) throw Object.assign(new Error('Not authorized'), { status: 403 })
+  if (r.status !== 'pending') throw Object.assign(new Error('Request not pending'), { status: 400 })
+  await pool.query("UPDATE friend_requests SET status='accepted' WHERE id=$1", [requestId])
+  return { ok: true }
+}
+
+export async function declineFriendRequest(requestId, userId) {
+  const req = await pool.query('SELECT * FROM friend_requests WHERE id = $1', [requestId])
+  if (!req.rows.length) throw Object.assign(new Error('Request not found'), { status: 404 })
+  const r = req.rows[0]
+  if (r.to_user_id !== userId && r.from_user_id !== userId)
+    throw Object.assign(new Error('Not authorized'), { status: 403 })
+  await pool.query('DELETE FROM friend_requests WHERE id = $1', [requestId])
+  return { ok: true }
+}
+
+export async function getFriends(userId) {
+  const { rows } = await pool.query(
+    `SELECT fr.id as request_id, fr.created_at,
+      fr.from_user_id, fr.to_user_id,
+      u1.username as fu, u1.display_name as fdn, u1.avatar_url as fav, u1.avatar_color as fac, u1.discriminator as fdis, u1.status as fst,
+      u2.username as tu, u2.display_name as tdn, u2.avatar_url as tav, u2.avatar_color as tac, u2.discriminator as tdis, u2.status as tst
+     FROM friend_requests fr
+     JOIN users u1 ON fr.from_user_id = u1.id
+     JOIN users u2 ON fr.to_user_id = u2.id
+     WHERE (fr.from_user_id = $1 OR fr.to_user_id = $1) AND fr.status = 'accepted'`,
+    [userId]
+  )
+  return rows.map(r => {
+    const isSender = r.from_user_id === userId
+    return {
+      requestId: r.request_id,
+      createdAt: r.created_at,
+      user: isSender
+        ? { id: r.to_user_id,   username: r.tu, displayName: r.tdn, avatarUrl: r.tav, avatarColor: r.tac, discriminator: r.tdis, status: r.tst }
+        : { id: r.from_user_id, username: r.fu, displayName: r.fdn, avatarUrl: r.fav, avatarColor: r.fac, discriminator: r.fdis, status: r.fst },
+    }
+  })
+}
+
+export async function removeFriend(userId, friendUserId) {
+  await pool.query(
+    `DELETE FROM friend_requests WHERE
+     ((from_user_id=$1 AND to_user_id=$2) OR (from_user_id=$2 AND to_user_id=$1))
+     AND status='accepted'`,
+    [userId, friendUserId]
+  )
+  return { ok: true }
+}

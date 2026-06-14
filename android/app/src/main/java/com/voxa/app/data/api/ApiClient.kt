@@ -170,6 +170,28 @@ object ApiClient {
         postMap("/api/dms/$dmId/read", emptyMap()) {}
 
     // -----------------------------------------------------------------------
+    // Friends
+    // -----------------------------------------------------------------------
+
+    suspend fun sendFriendRequest(username: String): Result<Unit> =
+        postMap("/api/friends/request", mapOf("username" to username)) {}
+
+    suspend fun getFriendRequests(): Result<List<FriendRequest>> =
+        get("/api/friends/requests") { json.decodeFromString(it) }
+
+    suspend fun acceptFriendRequest(id: String): Result<Unit> =
+        postMap("/api/friends/requests/$id/accept", emptyMap()) {}
+
+    suspend fun declineFriendRequest(id: String): Result<Unit> =
+        deleteReq("/api/friends/requests/$id")
+
+    suspend fun getFriends(): Result<List<Friend>> =
+        get("/api/friends") { json.decodeFromString(it) }
+
+    suspend fun removeFriend(userId: String): Result<Unit> =
+        deleteReq("/api/friends/$userId")
+
+    // -----------------------------------------------------------------------
     // Internal
     // -----------------------------------------------------------------------
 

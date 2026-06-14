@@ -204,6 +204,42 @@ actor APIClient {
         struct Empty: Encodable {}
         try await performVoid("/api/dms/\(dmId)/read", method: "POST", body: Empty())
     }
+
+    // MARK: - Servers (update)
+
+    func updateServer(id: String, name: String?, iconUrl: String?) async throws {
+        struct Body: Encodable { var name: String?; var iconUrl: String? }
+        let _: VoxaServer = try await perform("/api/servers/\(id)", method: "PATCH",
+                                              body: Body(name: name, iconUrl: iconUrl))
+    }
+
+    // MARK: - Friends
+
+    func sendFriendRequest(username: String) async throws {
+        struct Body: Encodable { let username: String }
+        try await performVoid("/api/friends/request", method: "POST", body: Body(username: username))
+    }
+
+    func getFriendRequests() async throws -> [FriendRequest] {
+        try await perform("/api/friends/requests")
+    }
+
+    func acceptFriendRequest(id: String) async throws {
+        struct Empty: Encodable {}
+        try await performVoid("/api/friends/requests/\(id)/accept", method: "POST", body: Empty())
+    }
+
+    func declineFriendRequest(id: String) async throws {
+        try await performVoid("/api/friends/requests/\(id)", method: "DELETE")
+    }
+
+    func getFriends() async throws -> [Friend] {
+        try await perform("/api/friends")
+    }
+
+    func removeFriend(userId: String) async throws {
+        try await performVoid("/api/friends/\(userId)", method: "DELETE")
+    }
 }
 
 // MARK: - Errors
@@ -269,6 +305,10 @@ class SocketClient: ObservableObject {
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
     }
+
+    // MARK: - Connect callback
+
+    var onConnect: (() -> Void)?
 
     // MARK: - Room management
 
@@ -364,6 +404,7 @@ class SocketClient: ObservableObject {
         } else if text.hasPrefix("40") {
             // Namespace connected
             namespaceConnected = true
+            onConnect?()
         } else if text == "41" {
             // Namespace disconnected
             namespaceConnected = false

@@ -161,4 +161,16 @@ export const api = {
     request(`/dms/${dmId}/messages/${msgId}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
   deleteDmMessage: (dmId, msgId) =>
     request(`/dms/${dmId}/messages/${msgId}`, { method: 'DELETE' }),
+
+  // Friends
+  sendFriendRequest: (username) =>
+    request('/friends/request', { method: 'POST', body: JSON.stringify({ username }) }),
+  getFriendRequests: () => request('/friends/requests'),
+  acceptFriendRequest: (id) =>
+    request(`/friends/requests/${id}/accept`, { method: 'POST' }),
+  declineFriendRequest: (id) =>
+    request(`/friends/requests/${id}`, { method: 'DELETE' }),
+  getFriends: () => request('/friends'),
+  removeFriend: (userId) =>
+    request(`/friends/${userId}`, { method: 'DELETE' }),
 }

@@ -17,6 +17,8 @@ export default function Me() {
   const [showSettings, setShowSettings] = useState(searchParams.get('settings') === '1')
   const [showEditProfile, setShowEditProfile] = useState(false)
   const [dms, setDms] = useState(null)
+  const [tab, setTab] = useState('messages')
+  const [pendingCount, setPendingCount] = useState(0)
   const handleLogout = () => { logout(); navigate('/') }
 
   useEffect(() => {
@@ -34,9 +36,18 @@ export default function Me() {
         {user && !user.emailVerified && (
           <VerifyBanner onSettings={() => setShowSettings(true)} />
         )}
-        <div className="h-12 px-4 flex items-center gap-3 border-b border-[#E3E5E8] shrink-0 bg-white">
-          <MessageSquare size={16} className="text-[#96989D]" />
-          <span className="font-bold text-[#1A1B1E] text-sm">Direct Messages</span>
+        <div className="h-12 px-2 flex items-center gap-1 border-b border-[#E3E5E8] shrink-0 bg-white">
+          <button onClick={() => setTab('messages')}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${tab === 'messages' ? 'text-[#1A1B1E] bg-[#F2F3F5]' : 'text-[#96989D] hover:text-[#1A1B1E] hover:bg-[#F7F8FA]'}`}>
+            <MessageSquare size={13} /> Messages
+          </button>
+          <button onClick={() => setTab('friends')}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${tab === 'friends' ? 'text-[#1A1B1E] bg-[#F2F3F5]' : 'text-[#96989D] hover:text-[#1A1B1E] hover:bg-[#F7F8FA]'}`}>
+            <Users size={13} /> Friends
+            {pendingCount > 0 && (
+              <span className="bg-[#E53935] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{pendingCount}</span>
+            )}
+          </button>
           <div className="flex-1" />
           <button onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 text-[#5C6068] hover:text-[#1A1B1E] text-xs font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-[#F2F3F5]">
@@ -44,7 +55,9 @@ export default function Me() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto scrollable">
-          <DmHome dms={dms} navigate={navigate} user={user} />
+          {tab === 'messages'
+            ? <DmHome dms={dms} navigate={navigate} user={user} />
+            : <FriendsHome user={user} navigate={navigate} onPendingCount={setPendingCount} />}
         </div>
       </div>
 
@@ -236,20 +249,187 @@ function EmptyFriends({ tab }) {
   )
 }
 
-function AddFriend() {
+function AddFriend({ onSent }) {
   const [val, setVal] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const onSubmit = async (e) => {
+    e.preventDefault()
+    const name = val.trim()
+    if (!name) return
+    setLoading(true); setError(''); setSuccess('')
+    try {
+      await api.sendFriendRequest(name)
+      setSuccess(`Friend request sent to ${name}!`)
+      setVal('')
+      onSent?.()
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }
+
   return (
     <div className="p-8 max-w-xl">
       <h2 className="text-xl font-black text-[#1A1B1E] mb-1">Add a friend</h2>
       <p className="text-[#5C6068] text-sm mb-5">Add friends using their Voxa username.</p>
-      <form onSubmit={e => e.preventDefault()} className="flex gap-2">
-        <input value={val} onChange={e => setVal(e.target.value)} placeholder="Enter a username"
+      <form onSubmit={onSubmit} className="flex gap-2">
+        <input value={val} onChange={e => { setVal(e.target.value); setError(''); setSuccess('') }}
+          placeholder="Enter a username"
           className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D] transition-all"
         />
-        <button type="submit" className="bg-[#E53935] hover:bg-[#C62828] text-white font-semibold px-5 py-3 rounded-xl text-sm transition-colors shrink-0">
-          Send request
+        <button type="submit" disabled={!val.trim() || loading}
+          className="bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-semibold px-5 py-3 rounded-xl text-sm transition-colors shrink-0">
+          {loading ? 'Sending…' : 'Send request'}
         </button>
       </form>
+      {error && <p className="mt-3 text-[#E53935] text-sm">{error}</p>}
+      {success && <p className="mt-3 text-[#10B981] text-sm">{success}</p>}
+    </div>
+  )
+}
+
+const FRIEND_COLORS = ['#E53935','#6366F1','#10B981','#F59E0B','#3B82F6','#8B5CF6','#EC4899']
+const fcol = (n) => FRIEND_COLORS[(n?.charCodeAt(0) ?? 0) % FRIEND_COLORS.length]
+
+function FriendsHome({ user, navigate, onPendingCount }) {
+  const [ftab, setFtab] = useState('all')
+  const [friends, setFriends] = useState([])
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    try {
+      const [f, r] = await Promise.all([api.getFriends(), api.getFriendRequests()])
+      setFriends(f ?? [])
+      setRequests(r ?? [])
+      onPendingCount?.((r ?? []).filter(req => req.incoming).length)
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const incoming = requests.filter(r => r.incoming)
+  const outgoing = requests.filter(r => !r.incoming)
+
+  const accept = async (req) => { try { await api.acceptFriendRequest(req.id); load() } catch {} }
+  const decline = async (req) => { try { await api.declineFriendRequest(req.id); load() } catch {} }
+  const remove = async (f) => { try { await api.removeFriend(f.user.id); load() } catch {} }
+
+  const openDm = async (userId) => { navigate(`/voxa/me/dms/${userId}`) }
+
+  const TABS = [
+    { id: 'all', label: 'All Friends' },
+    { id: 'pending', label: 'Pending', badge: incoming.length },
+    { id: 'add', label: 'Add Friend' },
+  ]
+
+  return (
+    <div className="max-w-2xl mx-auto w-full p-5">
+      <div className="flex items-center gap-1 mb-5 border-b border-[#E3E5E8] pb-3">
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setFtab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors
+              ${ftab === t.id ? 'bg-[#F2F3F5] text-[#1A1B1E]' : 'text-[#96989D] hover:text-[#1A1B1E] hover:bg-[#F7F8FA]'}`}>
+            {t.label}
+            {t.badge > 0 && (
+              <span className="bg-[#E53935] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{t.badge}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : ftab === 'all' ? (
+        friends.length === 0 ? <EmptyFriends tab="All" /> : (
+          <div className="space-y-0.5">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-2">All Friends — {friends.length}</div>
+            {friends.map(f => {
+              const u = f.user; const bg = u.avatarColor ?? fcol(u.username)
+              return (
+                <div key={f.requestId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#F7F8FA] transition-colors group">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0"
+                    style={{ background: bg }}>
+                    {(u.displayName ?? u.username)[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-[#1A1B1E] text-sm">{u.displayName ?? u.username}</div>
+                    <div className="text-[#96989D] text-xs">@{u.username}#{u.discriminator}</div>
+                  </div>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openDm(u.id)}
+                      className="p-2 rounded-lg bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#5C6068] transition-colors">
+                      <MessageSquare size={13} />
+                    </button>
+                    <button onClick={() => remove(f)}
+                      className="p-2 rounded-lg bg-[#F2F3F5] hover:bg-red-50 text-[#96989D] hover:text-[#E53935] transition-colors">
+                      <X size={13} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : ftab === 'pending' ? (
+        (incoming.length === 0 && outgoing.length === 0) ? <EmptyFriends tab="Pending" /> : (
+          <div className="space-y-4">
+            {incoming.length > 0 && (
+              <div>
+                <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-2">Incoming — {incoming.length}</div>
+                <div className="space-y-0.5">
+                  {incoming.map(r => {
+                    const u = r.user; const bg = u.avatarColor ?? fcol(u.username)
+                    return (
+                      <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#F7F8FA]">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0" style={{ background: bg }}>
+                          {(u.displayName ?? u.username)[0]?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-[#1A1B1E] text-sm">{u.displayName ?? u.username}</div>
+                          <div className="text-[#96989D] text-xs">Incoming request</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => accept(r)} className="p-2 rounded-lg bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] transition-colors"><Check size={13} /></button>
+                          <button onClick={() => decline(r)} className="p-2 rounded-lg bg-[#F2F3F5] hover:bg-red-50 text-[#96989D] hover:text-[#E53935] transition-colors"><X size={13} /></button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {outgoing.length > 0 && (
+              <div>
+                <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-2">Outgoing — {outgoing.length}</div>
+                <div className="space-y-0.5">
+                  {outgoing.map(r => {
+                    const u = r.user; const bg = u.avatarColor ?? fcol(u.username)
+                    return (
+                      <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#F7F8FA]">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0" style={{ background: bg }}>
+                          {(u.displayName ?? u.username)[0]?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-[#1A1B1E] text-sm">{u.displayName ?? u.username}</div>
+                          <div className="text-[#96989D] text-xs">Outgoing • Pending</div>
+                        </div>
+                        <button onClick={() => decline(r)} className="p-2 rounded-lg bg-[#F2F3F5] hover:bg-red-50 text-[#96989D] hover:text-[#E53935] transition-colors"><X size={13} /></button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        <AddFriend onSent={load} />
+      )}
     </div>
   )
 }

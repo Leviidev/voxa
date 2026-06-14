@@ -56,6 +56,11 @@ class ChatViewModel: ObservableObject {
             }
         }
 
+        // Re-join the channel after reconnect
+        socket.onConnect = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in self.socket.joinChannel(channelId) }
+        }
         socket.joinChannel(channelId)
 
         // Fallback poll every 10s in case socket misses anything
@@ -122,6 +127,7 @@ class ChatViewModel: ObservableObject {
         pollTask = nil
         socket.onNewMessage = nil
         socket.onMessageEdit = nil
+        socket.onConnect = nil
         socket.onMessageDelete = nil
         socket.onTypingUpdate = nil
         currentChannelId = nil

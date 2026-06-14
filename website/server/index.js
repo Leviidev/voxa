@@ -21,6 +21,7 @@ import dmRoutes from './routes/dms.js'
 import unreadRoutes from './routes/unread.js'
 import activityRoutes from './routes/activity.js'
 import adminRoutes from './routes/admin.js'
+import friendRoutes from './routes/friends.js'
 import releasesRoutes from './routes/releases.js'
 import githubRoutes from './routes/github.js'
 
@@ -191,6 +192,7 @@ app.use('/api/messages', messageRoutes)
 app.use('/api/invites', inviteRoutes)
 app.use('/api/dms', dmRoutes)
 app.use('/api/unread', unreadRoutes)
+app.use('/api/friends', friendRoutes)
 
 // ─── Static Frontend (production) ─────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {
