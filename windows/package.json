@@ -8,9 +8,11 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "dist:portable": "electron-builder --win portable"
+    "dist:portable": "electron-builder --win portable",
+    "publish": "electron-builder --win --publish always"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
@@ -27,6 +29,13 @@
       "main.js",
       "preload.js",
       "assets/**"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "YOUR_GITHUB_USERNAME",
+        "repo": "voxa"
+      }
     ],
     "win": {
       "target": [

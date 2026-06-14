@@ -6,6 +6,8 @@ on:
     paths:
       - 'windows/**'
       - '.github/workflows/desktop.yml'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -25,13 +27,22 @@ jobs:
         working-directory: windows
         run: npm install
 
-      - name: Build Electron app
+      - name: Build Electron app (dev build)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         working-directory: windows
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
 
-      - name: Upload NSIS installer
+      - name: Build & Publish Electron app (release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: windows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run publish
+
+      - name: Upload NSIS installer (dev builds only)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
           name: Voxa-Windows-Setup-${{ github.sha }}
@@ -39,7 +50,8 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-      - name: Upload portable exe
+      - name: Upload portable exe (dev builds only)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         uses: actions/upload-artifact@v4
         with:
           name: Voxa-Windows-Portable-${{ github.sha }}

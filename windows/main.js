@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, Tray, shell, dialog } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const { exec } = require('child_process')
 const path = require('path')
 const https = require('https')
@@ -87,8 +88,6 @@ const GAMES = [
   // Simulation
   { name: 'The Sims 4',               exe: 'TS4_x64.exe' },
   { name: 'Flight Simulator',         exe: 'FlightSimulator.exe' },
-  // Horror
-  { name: 'Phasmophobia',             exe: 'Phasmophobia.exe' },
   // Fighting
   { name: 'Street Fighter 6',         exe: 'StreetFighter6.exe' },
   { name: 'Tekken 8',                 exe: 'Tekken8.exe' },
@@ -101,6 +100,51 @@ let tray = null
 let authToken = null
 let currentGame = null
 let pollTimer = null
+let updateReady = false
+let updateVersion = null
+
+// ── Auto Updater ──────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+  if (!app.isPackaged) return
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    updateVersion = info.version
+    showTrayBalloon(
+      'Voxa Update Available',
+      `v${info.version} is downloading in the background…`
+    )
+    updateTray()
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = true
+    updateVersion = info.version
+    updateTray()
+    showTrayBalloon(
+      'Voxa Update Ready',
+      `v${info.version} downloaded. Click "Restart & Update" in the tray to install.`
+    )
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('[updater] error:', err?.message)
+  })
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {})
+  setTimeout(check, 5_000)
+  setInterval(check, 4 * 60 * 60 * 1000)
+}
+
+function showTrayBalloon(title, content) {
+  if (tray && process.platform === 'win32') {
+    try {
+      tray.displayBalloon({ iconType: 'info', title, content })
+    } catch (_) {}
+  }
+}
 
 // ── Game Detection ────────────────────────────────────────────────────────────
 function getRunningProcesses() {
@@ -115,11 +159,6 @@ function getRunningProcesses() {
           })
           .filter(Boolean)
         resolve(procs)
-      })
-    } else if (process.platform === 'darwin') {
-      exec('ps -eo comm', { timeout: 8000 }, (err, stdout) => {
-        if (err) return resolve([])
-        resolve(stdout.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean))
       })
     } else {
       exec('ps -eo comm', { timeout: 8000 }, (err, stdout) => {
@@ -203,17 +242,40 @@ function updateTray() {
   const label = currentGame ? `Playing ${currentGame}` : 'Voxa'
   tray.setToolTip(label)
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Voxa', enabled: false, type: 'normal' },
+  const menuTemplate = [
+    { label: 'Voxa', enabled: false },
+    ...(app.isPackaged ? [{ label: `v${app.getVersion()}`, enabled: false }] : []),
     { type: 'separator' },
     currentGame
       ? { label: `🎮 Playing: ${currentGame}`, enabled: false }
       : { label: 'No game detected', enabled: false },
     { type: 'separator' },
     { label: 'Open Voxa', click: () => { if (mainWindow) mainWindow.show() } },
-    { label: 'Quit', click: () => app.quit() },
-  ])
-  tray.setContextMenu(contextMenu)
+    { type: 'separator' },
+  ]
+
+  if (updateReady) {
+    menuTemplate.push({
+      label: `⬆️  Restart & Update${updateVersion ? ` to v${updateVersion}` : ''}`,
+      click: () => {
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Restart to Update',
+          message: `Voxa ${updateVersion ? `v${updateVersion}` : 'update'} is ready to install.`,
+          detail: 'Voxa will restart and install the update now.',
+          buttons: ['Restart & Update', 'Later'],
+          defaultId: 0,
+        }).then(({ response }) => {
+          if (response === 0) autoUpdater.quitAndInstall()
+        })
+      },
+    })
+    menuTemplate.push({ type: 'separator' })
+  }
+
+  menuTemplate.push({ label: 'Quit', click: () => app.quit() })
+
+  tray.setContextMenu(Menu.buildFromTemplate(menuTemplate))
 }
 
 function createTray() {
@@ -221,7 +283,7 @@ function createTray() {
   try {
     tray = new Tray(iconPath)
   } catch {
-    tray = new Tray(app.getFileIcon ? null : path.join(__dirname, 'assets', 'icon.png'))
+    return
   }
   tray.on('click', () => {
     if (mainWindow) {
@@ -284,6 +346,7 @@ ipcMain.on('auth:logout', () => {
 app.whenReady().then(() => {
   createWindow()
   try { createTray() } catch (_) {}
+  setupAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
