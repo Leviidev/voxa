@@ -1,15 +1,28 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Hash, Mic, Shield, Zap } from 'lucide-react'
+import { ArrowRight, Hash, Mic, Shield, Zap, Monitor, Download } from 'lucide-react'
+
+function useLatestRelease() {
+  const [release, setRelease] = useState(null)
+  useEffect(() => {
+    fetch('/api/releases/windows/latest')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setRelease(d) })
+      .catch(() => {})
+  }, [])
+  return release
+}
 
 export default function Home() {
+  const release = useLatestRelease()
   return (
     <div className="bg-white text-[#1A1B1E] min-h-screen overflow-y-auto landing-scroll">
       <Nav />
-      <Hero />
+      <Hero release={release} />
       <AppPreview />
       <Features />
-      <CTA />
-      <Footer />
+      <CTA release={release} />
+      <Footer release={release} />
     </div>
   )
 }
@@ -38,7 +51,7 @@ function Nav() {
   )
 }
 
-function Hero() {
+function Hero({ release }) {
   return (
     <section className="max-w-6xl mx-auto px-6 pt-24 pb-12">
       <div className="max-w-2xl">
@@ -59,6 +72,21 @@ function Hero() {
             Open Voxa free
             <ArrowRight size={15} />
           </Link>
+          {release && (
+            <a
+              href="/releases/windows/windows_x64.exe"
+              download
+              className="inline-flex items-center gap-2 bg-[#F2F3F5] hover:bg-[#E3E5E8] text-[#313439] font-semibold px-5 py-3 rounded-xl transition-all text-sm active:scale-[0.98]"
+            >
+              <Monitor size={15} className="text-[#5C6068]" />
+              Download for Windows
+              {release.version && (
+                <span className="text-[10px] font-bold bg-[#E3E5E8] text-[#5C6068] px-1.5 py-0.5 rounded-md">
+                  v{release.version}
+                </span>
+              )}
+            </a>
+          )}
           <Link to="/login"
             className="text-[#5C6068] hover:text-[#1A1B1E] text-sm font-medium transition-colors px-4 py-3 rounded-xl hover:bg-[#F2F3F5]">
             Already have an account →
@@ -222,7 +250,7 @@ function Features() {
   )
 }
 
-function CTA() {
+function CTA({ release }) {
   return (
     <section className="max-w-6xl mx-auto px-6 pb-24">
       <div className="bg-[#E53935] rounded-3xl px-10 py-14 text-white text-center relative overflow-hidden">
@@ -231,17 +259,30 @@ function CTA() {
         <p className="text-white/75 text-base mb-7 max-w-md mx-auto relative">
           Set up your server in 30 seconds. Your group will thank you.
         </p>
-        <Link to="/login?mode=register"
-          className="inline-flex items-center gap-2 bg-white text-[#E53935] font-bold px-7 py-3 rounded-xl text-sm hover:bg-white/90 transition-all shadow-md hover:shadow-lg active:scale-[0.98] relative">
-          Create an account free
-          <ArrowRight size={15} />
-        </Link>
+        <div className="flex items-center justify-center gap-3 flex-wrap relative">
+          <Link to="/login?mode=register"
+            className="inline-flex items-center gap-2 bg-white text-[#E53935] font-bold px-7 py-3 rounded-xl text-sm hover:bg-white/90 transition-all shadow-md hover:shadow-lg active:scale-[0.98]">
+            Create an account free
+            <ArrowRight size={15} />
+          </Link>
+          {release && (
+            <a
+              href="/releases/windows/windows_x64.exe"
+              download
+              className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white font-semibold px-5 py-3 rounded-xl text-sm transition-all active:scale-[0.98] border border-white/20"
+            >
+              <Download size={14} />
+              Windows app
+              {release.version && <span className="text-white/60 text-xs">v{release.version}</span>}
+            </a>
+          )}
+        </div>
       </div>
     </section>
   )
 }
 
-function Footer() {
+function Footer({ release }) {
   return (
     <footer className="border-t border-[#E3E5E8] py-10">
       <div className="max-w-6xl mx-auto px-6">
@@ -262,9 +303,21 @@ function Footer() {
             <p className="text-[#C0C2C7] text-xs">© 2025 Voxa. All rights reserved.</p>
           </div>
           <div className="flex items-center gap-6">
-            {['Terms', 'Privacy', 'Status', 'Download'].map(l => (
+            {['Terms', 'Privacy', 'Status'].map(l => (
               <a key={l} href="#" className="text-[#96989D] hover:text-[#1A1B1E] text-xs transition-colors">{l}</a>
             ))}
+            {release ? (
+              <a
+                href="/releases/windows/windows_x64.exe"
+                download
+                className="inline-flex items-center gap-1 text-[#96989D] hover:text-[#1A1B1E] text-xs transition-colors"
+              >
+                <Download size={10} />
+                Download{release.version ? ` v${release.version}` : ''}
+              </a>
+            ) : (
+              <a href="#" className="text-[#96989D] hover:text-[#1A1B1E] text-xs transition-colors">Download</a>
+            )}
           </div>
         </div>
       </div>
