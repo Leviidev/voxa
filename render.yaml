@@ -4,7 +4,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: cd website && npm install && npm run build
+    buildCommand: cd website && rm -f package-lock.json && npm install && npm run build
     startCommand: cd website && node server/index.js
     healthCheckPath: /api/health
     envVars:
@@ -17,6 +17,8 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: RESEND_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
         sync: false
 
 databases:

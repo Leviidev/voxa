@@ -386,14 +386,19 @@ function createWindow() {
     minHeight: 600,
     title: 'Voxa',
     backgroundColor: '#0B0B0C',
-    frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#111113',
+      symbolColor: '#ffffff',
+      height: 36,
+    },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
-  mainWindow.loadFile(path.join(__dirname, 'landing.html'))
+  mainWindow.loadURL(VOXA_URL)
   mainWindow.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); mainWindow.hide() } })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
