@@ -386,13 +386,14 @@ function createWindow() {
     minHeight: 600,
     title: 'Voxa',
     backgroundColor: '#0B0B0C',
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
-  mainWindow.loadURL(VOXA_URL)
+  mainWindow.loadFile(path.join(__dirname, 'landing.html'))
   mainWindow.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); mainWindow.hide() } })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
@@ -404,6 +405,17 @@ ipcMain.on('auth:logout', () => {
   authToken = null
   if (currentGame) { reportActivity(null).catch(() => {}); currentGame = null; updateTray() }
   stopPolling()
+})
+
+ipcMain.on('app:open', () => {
+  if (mainWindow) mainWindow.loadURL(VOXA_URL)
+})
+
+ipcMain.on('window:control', (_event, action) => {
+  if (!mainWindow) return
+  if (action === 'close')    mainWindow.hide()
+  if (action === 'minimize') mainWindow.minimize()
+  if (action === 'maximize') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
 })
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────────
