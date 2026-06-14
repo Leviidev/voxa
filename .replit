@@ -68,3 +68,4 @@ run = ["bash", "-c", "cd website && node server/index.js"]
 
 [userenv.shared]
 GITHUB_REPO = "leviidev/voxa"
+JWT_SECRET = "550615ac6f4d112e94c7962d8a10f52678bbe5a6ddc4cf206cab06de8694274b0337e6cb3cdf640d6ec88ddbd859c20ca14abc0b83301c0e5474160d7d019f86"
