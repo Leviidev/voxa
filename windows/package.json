@@ -37,7 +37,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerName": "Voxa Setup"
+      "artifactName": "VoxaSetup-${version}.exe"
     }
   }
 }
