@@ -224,4 +224,18 @@ export const api = {
   getFriends: () => request('/friends'),
   removeFriend: (userId) =>
     request(`/friends/${userId}`, { method: 'DELETE' }),
+
+  // Bans
+  getBans: (serverId) => request(`/servers/${serverId}/bans`),
+  banMember: (serverId, userId, reason) =>
+    request(`/servers/${serverId}/bans/${userId}`, { method: 'PUT', body: JSON.stringify({ reason }) }),
+  unbanMember: (serverId, userId) =>
+    request(`/servers/${serverId}/bans/${userId}`, { method: 'DELETE' }),
+
+  // Server Emojis
+  getServerEmojis: (serverId) => request(`/servers/${serverId}/emojis`),
+  createServerEmoji: (serverId, name, imageUrl) =>
+    request(`/servers/${serverId}/emojis`, { method: 'POST', body: JSON.stringify({ name, imageUrl }) }),
+  deleteServerEmoji: (serverId, emojiId) =>
+    request(`/servers/${serverId}/emojis/${emojiId}`, { method: 'DELETE' }),
 }

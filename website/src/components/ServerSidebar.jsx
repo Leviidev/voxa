@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, MessageSquare, LogOut, Compass } from 'lucide-react'
+import { Plus, MessageSquare, Compass } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useUnread } from '../context/UnreadContext.jsx'
@@ -168,25 +168,6 @@ export default function ServerSidebar() {
           </button>
         </div>
 
-        {/* User section */}
-        <div className="h-14 bg-[#161719] px-3 flex items-center gap-2 shrink-0 border-t border-black/20">
-          <UserAvatar user={user} size={28} />
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-[#DBDEE1] truncate leading-tight">
-              {user?.displayName || user?.username || 'you'}
-            </div>
-            <div className="text-[10px] text-[#6B6E75] leading-tight">
-              #{user?.discriminator || '0000'}
-            </div>
-          </div>
-          <button
-            onClick={() => { logout(); navigate('/') }}
-            className="w-6 h-6 rounded-lg hover:bg-white/[0.08] flex items-center justify-center transition-colors group shrink-0"
-            title="Sign out"
-          >
-            <LogOut size={12} className="text-[#6B6E75] group-hover:text-[#949BA4] transition-colors" />
-          </button>
-        </div>
 
       </div>
 

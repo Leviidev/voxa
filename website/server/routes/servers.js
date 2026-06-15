@@ -3,6 +3,7 @@ import {
   createServer, getUserServers, deleteServer, getServerWithChannels, updateServer, leaveServer,
   kickMember, getRoles, createRole, updateRole, deleteRole, assignRole, removeRole,
   createInvite, getServerInvites, deleteInvite, discoverServers, joinPublicServer,
+  banMember, unbanMember, getBans, getServerEmojis, createServerEmoji, deleteServerEmoji,
 } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
@@ -98,6 +99,44 @@ router.put('/:id/members/:userId/roles/:roleId', async (req, res) => {
 
 router.delete('/:id/members/:userId/roles/:roleId', async (req, res) => {
   try { await removeRole(req.params.id, req.user.id, req.params.userId, req.params.roleId); res.status(204).send() }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+// ─── Bans ─────────────────────────────────────────────────────────────────────
+router.get('/:id/bans', async (req, res) => {
+  try { res.json(await getBans(req.params.id, req.user.id)) }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.put('/:id/bans/:userId', async (req, res) => {
+  try {
+    const { reason } = req.body
+    await banMember(req.params.id, req.user.id, req.params.userId, reason)
+    res.status(204).send()
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.delete('/:id/bans/:userId', async (req, res) => {
+  try { await unbanMember(req.params.id, req.user.id, req.params.userId); res.status(204).send() }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+// ─── Emojis ───────────────────────────────────────────────────────────────────
+router.get('/:id/emojis', async (req, res) => {
+  try { res.json(await getServerEmojis(req.params.id)) }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.post('/:id/emojis', async (req, res) => {
+  try {
+    const { name, imageUrl } = req.body
+    if (!name?.trim() || !imageUrl?.trim()) return res.status(400).json({ error: 'name and imageUrl are required' })
+    res.status(201).json(await createServerEmoji(req.params.id, req.user.id, { name, imageUrl }))
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.delete('/:id/emojis/:emojiId', async (req, res) => {
+  try { await deleteServerEmoji(req.params.id, req.user.id, req.params.emojiId); res.status(204).send() }
   catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })
 

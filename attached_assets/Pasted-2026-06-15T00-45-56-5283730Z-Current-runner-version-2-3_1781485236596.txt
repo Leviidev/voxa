@@ -1,0 +1,178 @@
+2026-06-15T00:45:56.5283730Z Current runner version: '2.335.1'
+2026-06-15T00:45:56.5300180Z ##[group]Runner Image Provisioner
+2026-06-15T00:45:56.5300760Z Hosted Compute Agent
+2026-06-15T00:45:56.5301120Z Version: 20260527.539
+2026-06-15T00:45:56.5302900Z Commit: a891dd388383b896fa6ac04a82c0b75cec981078
+2026-06-15T00:45:56.5304560Z Build Date: 2026-05-27T21:39:57Z
+2026-06-15T00:45:56.5306030Z Worker ID: {7014a5f1-3a92-4024-976a-e5418f78cfa0}
+2026-06-15T00:45:56.5307480Z Azure Region: westus
+2026-06-15T00:45:56.5308540Z ##[endgroup]
+2026-06-15T00:45:56.5311620Z ##[group]Operating System
+2026-06-15T00:45:56.5312060Z macOS
+2026-06-15T00:45:56.5312390Z 15.7.7
+2026-06-15T00:45:56.5312700Z 24G720
+2026-06-15T00:45:56.5313020Z ##[endgroup]
+2026-06-15T00:45:56.5313360Z ##[group]Runner Image
+2026-06-15T00:45:56.5313730Z Image: macos-15-arm64
+2026-06-15T00:45:56.5314590Z Version: 20260610.0126.1
+2026-06-15T00:45:56.5316370Z Included Software: https://github.com/actions/runner-images/blob/macos-15-arm64/20260610.0126/images/macos/macos-15-arm64-Readme.md
+2026-06-15T00:45:56.5317430Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20260610.0126
+2026-06-15T00:45:56.5318060Z ##[endgroup]
+2026-06-15T00:45:56.5318850Z ##[group]GITHUB_TOKEN Permissions
+2026-06-15T00:45:56.5320500Z Contents: read
+2026-06-15T00:45:56.5320850Z Metadata: read
+2026-06-15T00:45:56.5321760Z Packages: read
+2026-06-15T00:45:56.5322810Z ##[endgroup]
+2026-06-15T00:45:56.5327560Z Secret source: Actions
+2026-06-15T00:45:56.5328080Z Prepare workflow directory
+2026-06-15T00:45:56.5618970Z Prepare all required actions
+2026-06-15T00:45:56.5686050Z Getting action download info
+2026-06-15T00:45:57.0573010Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-06-15T00:45:57.5736370Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-06-15T00:45:57.9633740Z Complete job name: build
+2026-06-15T00:45:58.0194750Z ##[group]Run actions/checkout@v4
+2026-06-15T00:45:58.0195700Z with:
+2026-06-15T00:45:58.0196030Z   repository: Leviidev/voxa
+2026-06-15T00:45:58.0198940Z   token: ***
+2026-06-15T00:45:58.0199250Z   ssh-strict: true
+2026-06-15T00:45:58.0199570Z   ssh-user: git
+2026-06-15T00:45:58.0199890Z   persist-credentials: true
+2026-06-15T00:45:58.0200230Z   clean: true
+2026-06-15T00:45:58.0200560Z   sparse-checkout-cone-mode: true
+2026-06-15T00:45:58.0200930Z   fetch-depth: 1
+2026-06-15T00:45:58.0201240Z   fetch-tags: false
+2026-06-15T00:45:58.0201870Z   show-progress: true
+2026-06-15T00:45:58.0203050Z   lfs: false
+2026-06-15T00:45:58.0203350Z   submodules: false
+2026-06-15T00:45:58.0203670Z   set-safe-directory: true
+2026-06-15T00:45:58.0204180Z ##[endgroup]
+2026-06-15T00:45:58.4870070Z Syncing repository: Leviidev/voxa
+2026-06-15T00:45:58.4871880Z ##[group]Getting Git version info
+2026-06-15T00:45:58.4872400Z Working directory is '/Users/runner/work/voxa/voxa'
+2026-06-15T00:45:58.4873850Z [command]/opt/homebrew/bin/git version
+2026-06-15T00:45:58.5174480Z git version 2.54.0
+2026-06-15T00:45:58.5208280Z ##[endgroup]
+2026-06-15T00:45:58.5229310Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/31dd8a56-983d-453f-9d80-79cb21ead10c/.gitconfig'
+2026-06-15T00:45:58.5244050Z Temporarily overriding HOME='/Users/runner/work/_temp/31dd8a56-983d-453f-9d80-79cb21ead10c' before making global git config changes
+2026-06-15T00:45:58.5245600Z Adding repository directory to the temporary git global config as a safe directory
+2026-06-15T00:45:58.5248360Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/voxa/voxa
+2026-06-15T00:45:58.5391140Z Deleting the contents of '/Users/runner/work/voxa/voxa'
+2026-06-15T00:45:58.5395170Z ##[group]Initializing the repository
+2026-06-15T00:45:58.5398890Z [command]/opt/homebrew/bin/git init /Users/runner/work/voxa/voxa
+2026-06-15T00:45:58.5710320Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-06-15T00:45:58.5711390Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-06-15T00:45:58.5713640Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-06-15T00:45:58.5738870Z hint: call:
+2026-06-15T00:45:58.5739480Z hint:
+2026-06-15T00:45:58.5740130Z hint: 	git config --global init.defaultBranch <name>
+2026-06-15T00:45:58.5740730Z hint:
+2026-06-15T00:45:58.5741190Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-06-15T00:45:58.5741900Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-06-15T00:45:58.5742420Z hint:
+2026-06-15T00:45:58.5742720Z hint: 	git branch -m <name>
+2026-06-15T00:45:58.5743060Z hint:
+2026-06-15T00:45:58.5743520Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-06-15T00:45:58.5745290Z Initialized empty Git repository in /Users/runner/work/voxa/voxa/.git/
+2026-06-15T00:45:58.5746670Z [command]/opt/homebrew/bin/git remote add origin https://github.com/Leviidev/voxa
+2026-06-15T00:45:58.5895000Z ##[endgroup]
+2026-06-15T00:45:58.5896820Z ##[group]Disabling automatic garbage collection
+2026-06-15T00:45:58.5898340Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-06-15T00:45:58.5999810Z ##[endgroup]
+2026-06-15T00:45:58.6000540Z ##[group]Setting up auth
+2026-06-15T00:45:58.6004230Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-06-15T00:45:58.6211400Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-06-15T00:45:58.7703780Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-06-15T00:45:58.7760970Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-06-15T00:45:58.8933610Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-06-15T00:45:58.8996880Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-06-15T00:45:59.0127320Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-06-15T00:45:59.0170190Z ##[endgroup]
+2026-06-15T00:45:59.0170810Z ##[group]Fetching the repository
+2026-06-15T00:45:59.0171970Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +92cd9150d31bc2932249505e1b370965d09f1def:refs/remotes/origin/main
+2026-06-15T00:45:59.5993500Z From https://github.com/Leviidev/voxa
+2026-06-15T00:45:59.5994240Z  * [new ref]         92cd9150d31bc2932249505e1b370965d09f1def -> origin/main
+2026-06-15T00:45:59.6112300Z ##[endgroup]
+2026-06-15T00:45:59.6114430Z ##[group]Determining the checkout info
+2026-06-15T00:45:59.6120470Z ##[endgroup]
+2026-06-15T00:45:59.6122100Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-06-15T00:45:59.6239430Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-06-15T00:45:59.6361130Z ##[group]Checking out the ref
+2026-06-15T00:45:59.6367840Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-06-15T00:45:59.7513040Z Switched to a new branch 'main'
+2026-06-15T00:45:59.7613980Z branch 'main' set up to track 'origin/main'.
+2026-06-15T00:45:59.7837070Z ##[endgroup]
+2026-06-15T00:45:59.8146210Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-06-15T00:45:59.8250020Z 92cd9150d31bc2932249505e1b370965d09f1def
+2026-06-15T00:45:59.8948000Z ##[group]Run sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+2026-06-15T00:45:59.8949410Z [36;1msudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer[0m
+2026-06-15T00:45:59.9000250Z shell: /bin/bash -e {0}
+2026-06-15T00:45:59.9001390Z ##[endgroup]
+2026-06-15T00:46:00.0572280Z ##[group]Run xcodebuild -version
+2026-06-15T00:46:00.0573150Z [36;1mxcodebuild -version[0m
+2026-06-15T00:46:00.0617110Z shell: /bin/bash -e {0}
+2026-06-15T00:46:00.0617780Z ##[endgroup]
+2026-06-15T00:46:00.5402610Z Xcode 16.4
+2026-06-15T00:46:00.5419740Z Build version 16F6
+2026-06-15T00:46:00.5520480Z ##[group]Run cd ios
+2026-06-15T00:46:00.5521000Z [36;1mcd ios[0m
+2026-06-15T00:46:00.5521590Z [36;1mxcodebuild -resolvePackageDependencies \[0m
+2026-06-15T00:46:00.5522410Z [36;1m  -project Voxa.xcodeproj \[0m
+2026-06-15T00:46:00.5525780Z [36;1m  -scheme Voxa 2>&1 | tail -20 || true[0m
+2026-06-15T00:46:00.5588110Z shell: /bin/bash -e {0}
+2026-06-15T00:46:00.5588710Z ##[endgroup]
+2026-06-15T00:46:05.4633110Z Command line invocation:
+2026-06-15T00:46:05.4690640Z     /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/xcodebuild -resolvePackageDependencies -project Voxa.xcodeproj -scheme Voxa
+2026-06-15T00:46:05.4734640Z 
+2026-06-15T00:46:05.4849890Z resolved source packages: 
+2026-06-15T00:46:05.5182710Z ##[group]Run cd ios
+2026-06-15T00:46:05.5183020Z [36;1mcd ios[0m
+2026-06-15T00:46:05.5183330Z [36;1mxcodebuild archive \[0m
+2026-06-15T00:46:05.5183650Z [36;1m  -project Voxa.xcodeproj \[0m
+2026-06-15T00:46:05.5184020Z [36;1m  -scheme Voxa \[0m
+2026-06-15T00:46:05.5184470Z [36;1m  -configuration Release \[0m
+2026-06-15T00:46:05.5184880Z [36;1m  -destination 'generic/platform=iOS' \[0m
+2026-06-15T00:46:05.5185270Z [36;1m  -archivePath $RUNNER_TEMP/Voxa.xcarchive \[0m
+2026-06-15T00:46:05.5185670Z [36;1m  CODE_SIGNING_REQUIRED=NO \[0m
+2026-06-15T00:46:05.5185970Z [36;1m  CODE_SIGNING_ALLOWED=NO \[0m
+2026-06-15T00:46:05.5186470Z [36;1m  CODE_SIGN_IDENTITY="" \[0m
+2026-06-15T00:46:05.5186840Z [36;1m  CODE_SIGN_STYLE=Manual \[0m
+2026-06-15T00:46:05.5187140Z [36;1m  AD_HOC_CODE_SIGNING_ALLOWED=YES \[0m
+2026-06-15T00:46:05.5187710Z [36;1m  2>&1 | grep -E '(error:|warning:|ARCHIVE SUCCEEDED|ARCHIVE FAILED)' | tail -30[0m
+2026-06-15T00:46:05.5240520Z shell: /bin/bash -e {0}
+2026-06-15T00:46:05.5240870Z ##[endgroup]
+2026-06-15T00:46:35.4841380Z /Users/runner/work/voxa/voxa/ios/Voxa/Network/APIClient.swift:417:22: warning: call to main actor-isolated instance method 'receive()' in a synchronous nonisolated context; this is an error in the Swift 6 language mode
+2026-06-15T00:46:35.4853660Z /Users/runner/work/voxa/voxa/ios/Voxa/Views/Main/MainView.swift:73:17: error: cannot find 'FriendsView' in scope
+2026-06-15T00:46:35.4868530Z /Users/runner/work/voxa/voxa/ios/Voxa/Views/Main/MainView.swift:75:53: error: cannot infer contextual base in reference to member 'large'
+2026-06-15T00:46:35.4869800Z /Users/runner/work/voxa/voxa/ios/Voxa/Views/Main/ChannelListView.swift:46:21: error: cannot find 'ServerSettingsView' in scope
+2026-06-15T00:46:35.4903770Z /Users/runner/work/voxa/voxa/ios/Voxa/Views/Main/DMView.swift:66:37: warning: 'init(destination:tag:selection:label:)' was deprecated in iOS 16.0: use NavigationLink(value:label:), or navigationDestination(isPresented:destination:), inside a NavigationStack or NavigationSplitView
+2026-06-15T00:46:35.4905900Z ** ARCHIVE FAILED **
+2026-06-15T00:46:35.4994810Z ##[group]Run APPS_DIR=$RUNNER_TEMP/Voxa.xcarchive/Products/Applications
+2026-06-15T00:46:35.4995480Z [36;1mAPPS_DIR=$RUNNER_TEMP/Voxa.xcarchive/Products/Applications[0m
+2026-06-15T00:46:35.4995940Z [36;1mPAYLOAD=$RUNNER_TEMP/export/Payload[0m
+2026-06-15T00:46:35.4996490Z [36;1mmkdir -p "$PAYLOAD"[0m
+2026-06-15T00:46:35.4996920Z [36;1mcp -R "$APPS_DIR/Voxa.app" "$PAYLOAD/Voxa.app"[0m
+2026-06-15T00:46:35.4997310Z [36;1mcd $RUNNER_TEMP/export[0m
+2026-06-15T00:46:35.4997580Z [36;1mzip -r Voxa.ipa Payload[0m
+2026-06-15T00:46:35.8322980Z shell: /bin/bash -e {0}
+2026-06-15T00:46:35.8323570Z ##[endgroup]
+2026-06-15T00:46:35.9494080Z cp: /Users/runner/work/_temp/Voxa.xcarchive/Products/Applications/Voxa.app: No such file or directory
+2026-06-15T00:46:35.9631690Z ##[error]Process completed with exit code 1.
+2026-06-15T00:46:36.0189650Z Post job cleanup.
+2026-06-15T00:46:36.5279490Z [command]/opt/homebrew/bin/git version
+2026-06-15T00:46:36.5852160Z git version 2.54.0
+2026-06-15T00:46:36.6033540Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/38bac2c3-7a0f-477d-86f4-1f680efa2c54/.gitconfig'
+2026-06-15T00:46:36.6034600Z Temporarily overriding HOME='/Users/runner/work/_temp/38bac2c3-7a0f-477d-86f4-1f680efa2c54' before making global git config changes
+2026-06-15T00:46:36.6036180Z Adding repository directory to the temporary git global config as a safe directory
+2026-06-15T00:46:36.6049960Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/voxa/voxa
+2026-06-15T00:46:36.6400710Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-06-15T00:46:36.6717930Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-06-15T00:46:36.8880860Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-06-15T00:46:36.8983520Z http.https://github.com/.extraheader
+2026-06-15T00:46:36.9177040Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-06-15T00:46:36.9487070Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-06-15T00:46:37.1848360Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-06-15T00:46:37.2075770Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-06-15T00:46:37.3894170Z Cleaning up orphan processes
+2026-06-15T00:46:37.5231480Z Terminate orphan process: pid (40069) (ibtoold)
+2026-06-15T00:46:37.5988170Z Terminate orphan process: pid (39790) (ibtoold)
+2026-06-15T00:46:38.2588240Z ##[warning]Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/checkout@v4. Actions will be forced to run with Node.js 24 by default starting June 16th, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

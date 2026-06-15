@@ -1627,3 +1627,82 @@ export async function setNotificationPref(userId, { serverId = null, channelId =
   )
   return { id: r.id, serverId: r.server_id, channelId: r.channel_id, muted: r.muted, mentionsOnly: r.mentions_only }
 }
+
+// ─── Bans ─────────────────────────────────────────────────────────────────────
+
+export async function banMember(serverId, requesterId, targetId, reason = null) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  if (targetId === requesterId) throw Object.assign(new Error('Cannot ban yourself'), { status: 400 })
+  if (targetId === server.owner_id) throw Object.assign(new Error('Cannot ban the server owner'), { status: 400 })
+  await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+  await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+  await pool.query(
+    `INSERT INTO server_bans (server_id, user_id, banned_by, reason)
+     VALUES ($1,$2,$3,$4) ON CONFLICT (server_id, user_id) DO UPDATE SET reason=$4, banned_by=$3`,
+    [serverId, targetId, requesterId, reason ?? null]
+  )
+}
+
+export async function unbanMember(serverId, requesterId, targetId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query('DELETE FROM server_bans WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+}
+
+export async function getBans(serverId, requesterId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows } = await pool.query(
+    `SELECT b.*, u.username, u.display_name, u.avatar_url, u.avatar_color, u.discriminator
+     FROM server_bans b JOIN users u ON u.id = b.user_id
+     WHERE b.server_id = $1 ORDER BY b.created_at DESC`,
+    [serverId]
+  )
+  return rows.map(r => ({
+    userId: r.user_id, username: r.username, displayName: r.display_name,
+    avatarUrl: r.avatar_url, avatarColor: r.avatar_color, discriminator: r.discriminator,
+    reason: r.reason, bannedBy: r.banned_by, createdAt: r.created_at,
+  }))
+}
+
+// ─── Server Emojis ────────────────────────────────────────────────────────────
+
+export async function getServerEmojis(serverId) {
+  const { rows } = await pool.query(
+    `SELECT e.*, u.username as creator_name FROM server_emojis e
+     LEFT JOIN users u ON u.id = e.created_by
+     WHERE e.server_id = $1 ORDER BY e.created_at DESC`,
+    [serverId]
+  )
+  return rows.map(r => ({
+    id: r.id, name: r.name, imageUrl: r.image_url,
+    createdBy: r.created_by, creatorName: r.creator_name, createdAt: r.created_at,
+  }))
+}
+
+export async function createServerEmoji(serverId, userId, { name, imageUrl }) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const safeName = sanitize(name, 32).toLowerCase().replace(/[^a-z0-9_]/g, '_')
+  if (!safeName) throw Object.assign(new Error('Invalid emoji name'), { status: 400 })
+  const id = generateId('emoji_')
+  const { rows: [emoji] } = await pool.query(
+    `INSERT INTO server_emojis (id, server_id, name, image_url, created_by)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [id, serverId, safeName, imageUrl, userId]
+  )
+  return { id: emoji.id, name: emoji.name, imageUrl: emoji.image_url, createdBy: emoji.created_by }
+}
+
+export async function deleteServerEmoji(serverId, userId, emojiId) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rowCount } = await pool.query('DELETE FROM server_emojis WHERE id=$1 AND server_id=$2', [emojiId, serverId])
+  if (!rowCount) throw Object.assign(new Error('Emoji not found'), { status: 404 })
+}

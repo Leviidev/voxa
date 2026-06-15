@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, MoreVertical, Hash, Volume2 } from 'lucide-react'
+import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, Hash, Volume2, Smile, Ban, UserCheck } from 'lucide-react'
 import { api } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useServers } from '../context/ServersContext.jsx'
@@ -33,6 +33,8 @@ const TABS = [
   { id: 'channels', label: 'Channels', icon: Hash },
   { id: 'roles', label: 'Roles', icon: Shield },
   { id: 'members', label: 'Members', icon: Users },
+  { id: 'bans', label: 'Bans', icon: AlertTriangle },
+  { id: 'emojis', label: 'Emojis', icon: Smile },
   { id: 'invites', label: 'Invites', icon: Link2 },
   { id: 'danger', label: 'Danger Zone', icon: Trash2, red: true },
 ]
@@ -96,6 +98,12 @@ export default function ServerSettingsModal({ server: initialServer, onClose }) 
             )}
             {tab === 'channels' && (
               <ChannelsTab server={server} isOwner={isOwner} onRefresh={refreshServer} />
+            )}
+            {tab === 'bans' && (
+              <BansTab server={server} isOwner={isOwner} />
+            )}
+            {tab === 'emojis' && (
+              <EmojisTab server={server} isOwner={isOwner} />
             )}
             {tab === 'invites' && (
               <InvitesTab server={server} />
@@ -643,6 +651,9 @@ function MembersTab({ server, isOwner, currentUserId, onRefresh }) {
   const [roles] = useState(server?.roles ?? [])
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [expandedMember, setExpandedMember] = useState(null)
+  const [banning, setBanning] = useState(null)
+  const [banReason, setBanReason] = useState('')
 
   const filtered = members.filter(m =>
     m.username.toLowerCase().includes(search.toLowerCase()) ||
@@ -650,10 +661,18 @@ function MembersTab({ server, isOwner, currentUserId, onRefresh }) {
   )
 
   const handleKick = async (memberId) => {
-    if (!window.confirm('Kick this member?')) return
+    if (!window.confirm('Kick this member? They can rejoin with an invite.')) return
     try {
       await api.kickMember(server.id, memberId)
       setMembers(prev => prev.filter(m => m.id !== memberId))
+    } catch (err) { setError(err.message) }
+  }
+
+  const handleBan = async (memberId) => {
+    try {
+      await api.banMember(server.id, memberId, banReason || null)
+      setMembers(prev => prev.filter(m => m.id !== memberId))
+      setBanning(null); setBanReason('')
     } catch (err) { setError(err.message) }
   }
 
@@ -662,8 +681,8 @@ function MembersTab({ server, isOwner, currentUserId, onRefresh }) {
       await api.assignRole(server.id, memberId, roleId)
       setMembers(prev => prev.map(m => {
         if (m.id !== memberId) return m
-        const hasRole = m.roles?.find(r => r.id === roleId)
-        return hasRole ? m : { ...m, roles: [...(m.roles ?? []), roles.find(r => r.id === roleId)] }
+        const roleObj = roles.find(r => r.id === roleId)
+        return { ...m, roles: [...(m.roles ?? []), roleObj].filter(Boolean) }
       }))
     } catch (err) { setError(err.message) }
   }
@@ -680,60 +699,286 @@ function MembersTab({ server, isOwner, currentUserId, onRefresh }) {
 
   const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
   const getColor = (name) => COLORS[name?.charCodeAt(0) % COLORS.length]
+  const assignableRoles = (m) => roles.filter(r => !r.isDefault && !(m.roles ?? []).find(mr => mr.id === r.id))
 
   return (
     <div className="px-6 py-5">
       {error && <ErrBanner msg={error} onDismiss={() => setError('')} />}
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-2">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search members…"
-          className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+          className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
         />
-      </div>
-      <div className="text-[9px] font-bold uppercase tracking-widest text-[#96989D] mb-3">
-        Members — {filtered.length}
+        <span className="text-xs text-[#96989D] shrink-0">{filtered.length} member{filtered.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="space-y-2">
-        {filtered.map(m => (
-          <div key={m.id} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl p-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden"
-                style={{ background: m.avatarUrl ? undefined : (m.avatarColor ?? getColor(m.username)) }}>
-                {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : (m.displayName ?? m.username)?.[0]?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[#1A1B1E] font-semibold text-sm truncate">{m.displayName ?? m.username}</span>
-                  {m.isOwner && <Crown size={12} className="text-[#F59E0B] shrink-0" title="Server Owner" />}
+        {filtered.map(m => {
+          const isExpanded = expandedMember === m.id
+          const isBanning = banning === m.id
+          const memberRoles = (m.roles ?? []).filter(r => !r.isDefault)
+          const available = assignableRoles(m)
+          return (
+            <div key={m.id} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 p-3">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden"
+                  style={{ background: m.avatarUrl ? undefined : (m.avatarColor ?? getColor(m.username)) }}>
+                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : (m.displayName ?? m.username)?.[0]?.toUpperCase()}
                 </div>
-                <div className="text-[#96989D] text-xs">@{m.username}#{m.discriminator}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[#1A1B1E] font-semibold text-sm truncate">{m.displayName ?? m.username}</span>
+                    {m.isOwner && <Crown size={11} className="text-[#F59E0B] shrink-0" title="Server Owner" />}
+                    {memberRoles.map(r => (
+                      <span key={r.id} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
+                        style={{ background: r.color ?? '#96989D' }}>{r.name}</span>
+                    ))}
+                  </div>
+                  <div className="text-[#96989D] text-xs">@{m.username}#{m.discriminator}</div>
+                </div>
+                {isOwner && !m.isOwner && m.id !== currentUserId && (
+                  <button
+                    onClick={() => setExpandedMember(isExpanded ? null : m.id)}
+                    className={clsx('w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors shrink-0',
+                      isExpanded ? 'bg-[#E53935]/10 text-[#E53935]' : 'bg-[#EAEBEE] text-[#5C6068] hover:bg-[#E0E2E6]')}
+                    title="Manage member"
+                  >
+                    <Edit3 size={13} />
+                  </button>
+                )}
               </div>
-              {isOwner && !m.isOwner && m.id !== currentUserId && (
-                <button onClick={() => handleKick(m.id)}
-                  className="text-xs text-[#E53935] hover:bg-red-50 px-2 py-1 rounded-lg transition-colors font-medium">
-                  Kick
-                </button>
+
+              {isExpanded && isOwner && !m.isOwner && m.id !== currentUserId && (
+                <div className="border-t border-[#E3E5E8] bg-white px-3 pb-3 pt-2 space-y-3">
+                  {/* Role assignment */}
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1.5 flex items-center gap-1">
+                      <UserCheck size={11} /> Roles
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {memberRoles.map(r => (
+                        <button key={r.id} onClick={() => handleRemoveRole(m.id, r.id)}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full text-white transition-opacity hover:opacity-75"
+                          style={{ background: r.color ?? '#96989D' }}
+                          title="Click to remove">
+                          {r.name} <X size={9} />
+                        </button>
+                      ))}
+                      {available.map(r => (
+                        <button key={r.id} onClick={() => handleAssignRole(m.id, r.id)}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border-2 border-dashed text-[#5C6068] border-[#C0C2C7] hover:border-[#1A1B1E] hover:text-[#1A1B1E] transition-colors">
+                          <Plus size={9} /> {r.name}
+                        </button>
+                      ))}
+                      {roles.filter(r => !r.isDefault).length === 0 && (
+                        <span className="text-[10px] text-[#96989D]">No roles created yet — add some in the Roles tab.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  {!isBanning ? (
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#F2F3F5]">
+                      <button onClick={() => handleKick(m.id)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-[#E53935] hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors border border-red-200">
+                        Kick
+                      </button>
+                      <button onClick={() => setBanning(m.id)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#E53935] hover:bg-[#C62828] px-3 py-1.5 rounded-lg transition-colors">
+                        <Ban size={11} /> Ban
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pt-1 border-t border-[#F2F3F5] space-y-2">
+                      <div className="text-xs font-bold text-[#E53935]">Ban {m.displayName ?? m.username}?</div>
+                      <input value={banReason} onChange={e => setBanReason(e.target.value)}
+                        placeholder="Reason (optional)"
+                        className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[#E53935]"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleBan(m.id)}
+                          className="flex-1 bg-[#E53935] hover:bg-[#C62828] text-white text-xs font-bold py-1.5 rounded-lg transition-colors">
+                          Confirm Ban
+                        </button>
+                        <button onClick={() => { setBanning(null); setBanReason('') }}
+                          className="px-3 text-[#5C6068] text-xs font-medium hover:text-[#1A1B1E] transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            {/* Role badges + assignment */}
-            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-              {(m.roles ?? []).filter(r => !r.isDefault).map(r => (
-                <span key={r.id} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full text-white"
-                  style={{ background: r.color ?? '#96989D' }}>
-                  {r.name}
-                  {isOwner && (
-                    <button onClick={() => handleRemoveRole(m.id, r.id)} className="hover:opacity-70 transition-opacity ml-0.5">
-                      <X size={9} />
-                    </button>
-                  )}
-                </span>
-              ))}
-              {isOwner && roles.filter(r => !r.isDefault && !(m.roles ?? []).find(mr => mr.id === r.id)).map(r => (
-                <button key={r.id} onClick={() => handleAssignRole(m.id, r.id)}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-dashed border-[#E3E5E8] text-[#96989D] hover:border-[#5C6068] hover:text-[#5C6068] transition-colors">
-                  <Plus size={9} /> {r.name}
-                </button>
-              ))}
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Bans Tab ─────────────────────────────────────────────────────────────────
+function BansTab({ server, isOwner }) {
+  const [bans, setBans] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!isOwner) { setLoading(false); return }
+    api.getBans(server.id).then(setBans).catch(e => setError(e.message)).finally(() => setLoading(false))
+  }, [server.id, isOwner])
+
+  const handleUnban = async (userId) => {
+    try {
+      await api.unbanMember(server.id, userId)
+      setBans(prev => prev.filter(b => b.userId !== userId))
+    } catch (err) { setError(err.message) }
+  }
+
+  const COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
+  const getColor = (name) => COLORS[name?.charCodeAt(0) % COLORS.length]
+  const filtered = bans.filter(b =>
+    b.username.toLowerCase().includes(search.toLowerCase()) ||
+    (b.displayName ?? '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  if (!isOwner) return (
+    <div className="px-6 py-10 text-center text-[#96989D] text-sm">Only the server owner can view bans.</div>
+  )
+
+  return (
+    <div className="px-6 py-5">
+      {error && <ErrBanner msg={error} onDismiss={() => setError('')} />}
+      <div className="flex items-center gap-2 mb-4">
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search banned users…"
+          className="flex-1 bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+        />
+        <span className="text-xs text-[#96989D] shrink-0">{bans.length} ban{bans.length !== 1 ? 's' : ''}</span>
+      </div>
+      {loading && <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" /></div>}
+      {!loading && filtered.length === 0 && (
+        <div className="text-center py-10">
+          <Ban size={32} className="mx-auto text-[#96989D] mb-2 opacity-40" />
+          <p className="text-[#96989D] text-sm">{bans.length === 0 ? 'No bans yet.' : 'No results.'}</p>
+        </div>
+      )}
+      <div className="space-y-2">
+        {filtered.map(b => (
+          <div key={b.userId} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl px-3 py-2.5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden"
+              style={{ background: b.avatarUrl ? undefined : (b.avatarColor ?? getColor(b.username)) }}>
+              {b.avatarUrl ? <img src={b.avatarUrl} alt="" className="w-full h-full object-cover" /> : (b.displayName ?? b.username)?.[0]?.toUpperCase()}
             </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[#1A1B1E] font-semibold text-sm">{b.displayName ?? b.username}</div>
+              <div className="text-[#96989D] text-xs">@{b.username}#{b.discriminator}</div>
+              {b.reason && <div className="text-[#5C6068] text-xs mt-0.5 italic">"{b.reason}"</div>}
+            </div>
+            <button onClick={() => handleUnban(b.userId)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-[#E53935] hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors border border-red-200 shrink-0">
+              <UserCheck size={12} /> Unban
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Emojis Tab ───────────────────────────────────────────────────────────────
+function EmojisTab({ server, isOwner }) {
+  const [emojis, setEmojis] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newUrl, setNewUrl] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    api.getServerEmojis(server.id).then(setEmojis).catch(e => setError(e.message)).finally(() => setLoading(false))
+  }, [server.id])
+
+  const handleAdd = async () => {
+    if (!newName.trim() || !newUrl.trim()) return
+    setSaving(true); setError('')
+    try {
+      const emoji = await api.createServerEmoji(server.id, newName.trim(), newUrl.trim())
+      setEmojis(prev => [emoji, ...prev])
+      setShowAdd(false); setNewName(''); setNewUrl('')
+    } catch (err) { setError(err.message) }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (emojiId) => {
+    try {
+      await api.deleteServerEmoji(server.id, emojiId)
+      setEmojis(prev => prev.filter(e => e.id !== emojiId))
+    } catch (err) { setError(err.message) }
+  }
+
+  return (
+    <div className="px-6 py-5">
+      {error && <ErrBanner msg={error} onDismiss={() => setError('')} />}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-[#5C6068] text-xs">Custom emoji available to all members in this server.</p>
+          <p className="text-[#96989D] text-[10px] mt-0.5">{emojis.length} / 50 slots used</p>
+        </div>
+        {isOwner && (
+          <button onClick={() => setShowAdd(v => !v)}
+            className="flex items-center gap-1.5 bg-[#E53935] hover:bg-[#C62828] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={13} /> Add Emoji
+          </button>
+        )}
+      </div>
+
+      {showAdd && isOwner && (
+        <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-[#1A1B1E] uppercase tracking-wider">Add Emoji</span>
+            <button onClick={() => setShowAdd(false)}><X size={14} className="text-[#96989D]" /></button>
+          </div>
+          <SField label="Name (letters, numbers, underscores)" value={newName}
+            onChange={setNewName} placeholder="e.g. cool_face" />
+          <SField label="Image URL" value={newUrl}
+            onChange={setNewUrl} placeholder="https://example.com/emoji.png"
+            hint="Direct link to a PNG/GIF image (max 256×256px recommended)" />
+          {newUrl && (
+            <div className="flex items-center gap-2">
+              <img src={newUrl} alt="preview" className="w-8 h-8 rounded object-contain bg-[#EAEBEE]"
+                onError={e => e.target.style.display = 'none'} />
+              <span className="text-xs text-[#96989D]">Preview</span>
+            </div>
+          )}
+          <button onClick={handleAdd} disabled={saving || !newName.trim() || !newUrl.trim()}
+            className="bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+            {saving ? 'Adding…' : 'Add Emoji'}
+          </button>
+        </div>
+      )}
+
+      {loading && <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" /></div>}
+      {!loading && emojis.length === 0 && (
+        <div className="text-center py-10">
+          <Smile size={32} className="mx-auto text-[#96989D] mb-2 opacity-40" />
+          <p className="text-[#96989D] text-sm">No custom emojis yet.</p>
+          {isOwner && <p className="text-[#C0C2C7] text-xs mt-1">Click "Add Emoji" above to get started.</p>}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {emojis.map(e => (
+          <div key={e.id} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl px-3 py-2 flex items-center gap-3">
+            <img src={e.imageUrl} alt={e.name} className="w-8 h-8 rounded object-contain bg-[#EAEBEE] shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-[#1A1B1E] font-mono text-xs font-semibold truncate">:{e.name}:</div>
+              {e.creatorName && <div className="text-[#96989D] text-[10px]">by {e.creatorName}</div>}
+            </div>
+            {isOwner && (
+              <button onClick={() => handleDelete(e.id)}
+                className="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-[#96989D] hover:text-[#E53935] transition-colors shrink-0">
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
         ))}
       </div>

@@ -1,1 +1,2 @@
-- [Voxa project overview](voxa-overview.md) — architecture, design system, workflow setup, and production deployment notes
+- [Voxa stack](voxa-stack.md) — React+Vite (port 5000) + Express+Socket.io (port 3001) + PostgreSQL; custom JWT auth; Resend email optional.
+- [DB column additions](voxa-db-additions.md) — attachment fields added to messages/dm_messages, server_bans and server_emojis tables created, welcome_channel_id/system_channel_id added to servers.
