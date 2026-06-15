@@ -442,6 +442,165 @@ function NotifPane({ channelId, isMuted, setIsMuted, isMentsOnly, setIsMentsOnly
   )
 }
 
+// ── URL linkifier ─────────────────────────────────────────────────────────────
+function linkify(text) {
+  if (!text) return text
+  const urlRe = /https?:\/\/[^\s<>"]+/g
+  const parts = []
+  let last = 0
+  let m
+  while ((m = urlRe.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    const url = m[0]
+    const isInvite = /\/invite\//i.test(url)
+    parts.push(
+      <a key={m.index} href={url} target="_blank" rel="noopener noreferrer"
+        className={clsx(
+          'underline decoration-1 underline-offset-2 break-all transition-colors',
+          isInvite
+            ? 'text-[#6366F1] hover:text-[#818CF8]'
+            : 'text-[#00AFF4] hover:text-[#0097D6]'
+        )}>
+        {url}
+      </a>
+    )
+    last = m.index + url.length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts.length ? parts : text
+}
+
+// ── Invite embed ──────────────────────────────────────────────────────────────
+const EMBED_ACCENT = ['#E53935','#6366F1','#10B981','#F59E0B','#3B82F6','#8B5CF6','#EC4899']
+
+function InviteEmbed({ content }) {
+  const INVITE_RE = /(?:https?:\/\/[^\s/]+\/)?invite\/([A-Za-z0-9]{6,12})/gi
+  const codes = [...new Set([...content.matchAll(INVITE_RE)].map(m => m[1].toUpperCase()))]
+  if (!codes.length) return null
+  return (
+    <div className="flex flex-col gap-2 mt-2">
+      {codes.map(code => <SingleInviteEmbed key={code} code={code} />)}
+    </div>
+  )
+}
+
+function SingleInviteEmbed({ code }) {
+  const { refetch } = useServers()
+  const [preview, setPreview] = useState(null)
+  const [status, setStatus] = useState('loading')
+  const [joining, setJoining] = useState(false)
+  const [joined, setJoined] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    api.getInvitePreview(code)
+      .then(data => {
+        if (cancelled) return
+        setPreview(data)
+        setStatus('ok')
+        if (data.alreadyMember) setJoined(true)
+      })
+      .catch(() => { if (!cancelled) setStatus('error') })
+    return () => { cancelled = true }
+  }, [code])
+
+  const accent = preview?.iconColor
+    || EMBED_ACCENT[(preview?.serverName?.charCodeAt(0) ?? 0) % EMBED_ACCENT.length]
+
+  const handleJoin = async () => {
+    if (joining || joined || preview?.expired) return
+    setJoining(true)
+    try {
+      await api.joinByInvite(code)
+      await refetch()
+      setJoined(true)
+    } catch (_) {}
+    setJoining(false)
+  }
+
+  if (status === 'loading') return (
+    <div className="bg-[#2B2D31] border border-white/[0.06] rounded-xl overflow-hidden max-w-[420px] animate-pulse">
+      <div className="h-[3px] bg-[#383A40]" />
+      <div className="p-4 space-y-3">
+        <div className="h-2 bg-white/[0.06] rounded w-36" />
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/[0.06] shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 bg-white/[0.06] rounded w-28" />
+            <div className="h-2 bg-white/[0.06] rounded w-16" />
+          </div>
+          <div className="w-16 h-8 rounded-lg bg-white/[0.06] shrink-0" />
+        </div>
+      </div>
+    </div>
+  )
+
+  if (status === 'error') return (
+    <div className="bg-[#2B2D31] border border-white/[0.06] rounded-xl px-4 py-3 max-w-[420px]">
+      <p className="text-[#6B6E75] text-xs">Could not load invite preview.</p>
+    </div>
+  )
+
+  const acronym = preview.serverName
+    ?.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() ?? '??'
+
+  return (
+    <div className="bg-[#2B2D31] border border-white/[0.06] rounded-xl overflow-hidden max-w-[420px] w-full">
+      {/* Accent stripe */}
+      <div className="h-[3px]" style={{ background: accent }} />
+
+      <div className="p-4">
+        {/* Header label */}
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6E75] mb-3 leading-none">
+          {preview.expired ? 'Invite expired' : "You've been invited to join a server"}
+        </p>
+
+        <div className="flex items-center gap-3">
+          {/* Server icon */}
+          <div
+            className="w-12 h-12 rounded-2xl shrink-0 overflow-hidden flex items-center justify-center font-bold text-white text-sm"
+            style={{ background: preview.iconUrl ? undefined : accent }}>
+            {preview.iconUrl
+              ? <img src={preview.iconUrl} alt="" className="w-full h-full object-cover" />
+              : acronym}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-white text-sm leading-tight truncate">{preview.serverName}</p>
+            {preview.description && (
+              <p className="text-[#949BA4] text-xs truncate mt-0.5">{preview.description}</p>
+            )}
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className="w-2 h-2 rounded-full bg-[#23a55a] shrink-0" />
+              <span className="text-[#6B6E75] text-xs">
+                {(preview.memberCount ?? 0).toLocaleString()} member{preview.memberCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+
+          {/* Button */}
+          <button
+            onClick={handleJoin}
+            disabled={joining || joined || preview.expired}
+            className={clsx(
+              'shrink-0 min-w-[72px] h-8 px-4 rounded-lg text-sm font-bold transition-all select-none',
+              joined
+                ? 'bg-[#23a55a]/15 text-[#23a55a] cursor-default'
+                : preview.expired
+                ? 'bg-white/[0.06] text-[#6B6E75] cursor-default'
+                : joining
+                ? 'bg-[#23a55a]/60 text-white cursor-wait'
+                : 'bg-[#23a55a] hover:bg-[#1e9150] text-white active:scale-95 cursor-pointer'
+            )}>
+            {joining ? '…' : joined ? 'Joined ✓' : preview.expired ? 'Expired' : 'Join'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Message Attachment ────────────────────────────────────────────────────────
 function MsgAttachment({ url, name, type }) {
   if (!url) return null
@@ -665,10 +824,11 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
     )}>
       <span className="text-[#6B6E75] text-[10px] w-9 text-right opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 font-mono">{time}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-[#DBDEE1] leading-relaxed">
-          {msg.content}
+        <p className="text-sm text-[#DBDEE1] leading-relaxed break-words">
+          {linkify(msg.content)}
           {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
+        {msg.content && <InviteEmbed content={msg.content} />}
         {msg.attachmentUrl && <MsgAttachment url={msg.attachmentUrl} name={msg.attachmentName} type={msg.attachmentType} />}
         {pinBadge}
         {reactions}
@@ -700,10 +860,11 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
           {isOptimistic && <span className="text-[#6B6E75] text-[10px]">sending…</span>}
           {pinBadge}
         </div>
-        <p className="text-sm text-[#DBDEE1] leading-relaxed">
-          {msg.content}
+        <p className="text-sm text-[#DBDEE1] leading-relaxed break-words">
+          {linkify(msg.content)}
           {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
+        {msg.content && <InviteEmbed content={msg.content} />}
         {msg.attachmentUrl && <MsgAttachment url={msg.attachmentUrl} name={msg.attachmentName} type={msg.attachmentType} />}
         {reactions}
         {threadSummary}

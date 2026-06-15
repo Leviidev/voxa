@@ -564,6 +564,52 @@ export async function useInvite(code, userId) {
   return getServerWithChannels(invite.server_id, userId)
 }
 
+export async function getInvitePreview(code, userId) {
+  const { rows: [row] } = await pool.query(`
+    SELECT
+      i.code, i.expires_at, i.max_uses, i.uses,
+      s.id          AS server_id,
+      s.name        AS server_name,
+      s.icon_url,   s.icon_color,
+      s.description,
+      s.banner_url, s.banner_color,
+      COUNT(DISTINCT sm.user_id)::int AS member_count
+    FROM invites i
+    JOIN servers s ON s.id = i.server_id
+    LEFT JOIN server_members sm ON sm.server_id = s.id
+    WHERE i.code = $1
+    GROUP BY i.id, s.id
+  `, [code])
+  if (!row) throw Object.assign(new Error('Invite not found'), { status: 404 })
+
+  const expired =
+    (row.expires_at && new Date(row.expires_at) < new Date()) ||
+    Boolean(row.max_uses && row.uses >= row.max_uses)
+
+  let alreadyMember = false
+  if (userId && !expired) {
+    const { rows: [m] } = await pool.query(
+      'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [row.server_id, userId]
+    )
+    alreadyMember = !!m
+  }
+
+  return {
+    code:        row.code,
+    serverId:    row.server_id,
+    serverName:  row.server_name,
+    iconUrl:     row.icon_url,
+    iconColor:   row.icon_color,
+    description: row.description,
+    bannerUrl:   row.banner_url,
+    bannerColor: row.banner_color,
+    memberCount: row.member_count,
+    expired,
+    alreadyMember,
+  }
+}
+
 export async function deleteInvite(code, userId) {
   const { rows: [invite] } = await pool.query('SELECT * FROM invites WHERE code=$1', [code])
   if (!invite) throw Object.assign(new Error('Invite not found'), { status: 404 })

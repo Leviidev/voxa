@@ -85,6 +85,8 @@ export const api = {
     request(`/servers/${serverId}/invites/${code}`, { method: 'DELETE' }),
   joinByInvite: (code) =>
     request(`/invites/${code}/join`, { method: 'POST' }),
+  getInvitePreview: (code) =>
+    request(`/invites/${code}/preview`),
 
   // Channels
   createChannel: (serverId, name, type) =>
