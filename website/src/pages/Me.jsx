@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun, Check, Type, MessageSquare, Send, EyeOff, Eye } from 'lucide-react'
+import { Settings, LogOut, UserCircle, Bell, Shield, Palette, Users, X, Edit3, CheckCircle2, Mail, AlertTriangle, ShieldCheck, ShieldOff, KeyRound, Trash2, Plus, Copy, Download, ArrowLeft, Smartphone, Clock, Lock, Globe, Moon, Sun, Check, Type, MessageSquare, Send, EyeOff, Eye, Gamepad2, BellOff, Hash } from 'lucide-react'
 import clsx from 'clsx'
 import ProfileEditModal from '../components/ProfileEditModal.jsx'
 import { api } from '../lib/api.js'
@@ -622,6 +622,8 @@ function AccountSettings({ user, onEditProfile }) {
         )}
       </div>
 
+      <GameActivitySection user={user} />
+
       <div className="flex items-center gap-3 pt-2">
         <div className="h-px bg-[#E3E5E8] flex-1" />
         <span className="text-[10px] font-bold uppercase tracking-widest text-[#96989D]">Security</span>
@@ -646,6 +648,54 @@ function AccountSettings({ user, onEditProfile }) {
       <ChangePasswordSection />
 
       <LoginHistorySection />
+    </div>
+  )
+}
+
+// ─── Game Activity ────────────────────────────────────────────────────────────
+
+function GameActivitySection({ user }) {
+  const [game, setGame] = useState(user?.gameActivity ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => { setGame(user?.gameActivity ?? '') }, [user?.gameActivity])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.updateProfile({ gameActivity: game.trim() || null })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (_) {}
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Gamepad2 size={14} className="text-[#96989D]" />
+        <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D]">Game / Rich Presence</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          value={game}
+          onChange={e => setGame(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && save()}
+          maxLength={64}
+          placeholder="What are you playing? (optional)"
+          className="flex-1 bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+        />
+        <button
+          onClick={save}
+          disabled={saving}
+          className="px-4 py-2 bg-[#E53935] hover:bg-[#C62828] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 shrink-0">
+          {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      <p className="text-[#96989D] text-xs mt-2 leading-relaxed">
+        Shown next to your name in shared servers. Clear to hide it.
+      </p>
     </div>
   )
 }
@@ -1250,24 +1300,51 @@ const NOTIF_ITEMS = [
 ]
 
 function NotificationSettings() {
-  const [prefs, setPrefs] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('voxa_notif_prefs') || '{}') } catch { return {} }
-  })
+  const [serverPrefs, setServerPrefs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(null)
   const [permDenied, setPermDenied] = useState(false)
 
-  const toggle = async (key, needsPermission, defaultOn) => {
-    const current = prefs[key] ?? defaultOn
+  useEffect(() => {
+    api.getNotifPrefs()
+      .then(data => { setServerPrefs(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const getGlobalPref = (key) => {
+    try { return JSON.parse(localStorage.getItem('voxa_notif_prefs') || '{}')[key] } catch { return undefined }
+  }
+
+  const toggleGlobal = async (key, needsPermission, defaultOn) => {
+    const current = getGlobalPref(key) ?? defaultOn
     if (!current && needsPermission) {
       if (!('Notification' in window)) return
-      const perm = Notification.permission === 'granted'
-        ? 'granted'
-        : await Notification.requestPermission()
+      const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
       if (perm !== 'granted') { setPermDenied(true); setTimeout(() => setPermDenied(false), 4000); return }
     }
-    const updated = { ...prefs, [key]: !current }
-    setPrefs(updated)
-    localStorage.setItem('voxa_notif_prefs', JSON.stringify(updated))
+    try {
+      const stored = JSON.parse(localStorage.getItem('voxa_notif_prefs') || '{}')
+      localStorage.setItem('voxa_notif_prefs', JSON.stringify({ ...stored, [key]: !current }))
+    } catch (_) {}
+    setServerPrefs(p => [...p])
   }
+
+  const handleUnmute = async (pref) => {
+    const id = pref.channelId ?? pref.serverId
+    setSaving(id)
+    try {
+      const updated = await api.setNotifPref({
+        serverId: pref.serverId ?? null,
+        channelId: pref.channelId ?? null,
+        muted: false,
+        mentionsOnly: pref.mentionsOnly,
+      })
+      setServerPrefs(prev => prev.map(p => p.id === pref.id ? updated : p))
+    } catch (_) {}
+    setSaving(null)
+  }
+
+  const mutedPrefs = serverPrefs.filter(p => p.muted)
 
   return (
     <div className="space-y-6">
@@ -1277,8 +1354,9 @@ function NotificationSettings() {
           Browser blocked notifications. Enable them in your browser settings and try again.
         </div>
       )}
+
       <div>
-        <SectionLabel>Notification Preferences</SectionLabel>
+        <SectionLabel>Global Preferences</SectionLabel>
         <div className="space-y-2">
           {NOTIF_ITEMS.map(({ key, label, desc, needsPermission, defaultOn }) => (
             <div key={key} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between">
@@ -1287,13 +1365,60 @@ function NotificationSettings() {
                 <div className="text-[#96989D] text-xs mt-0.5">{desc}</div>
               </div>
               <Toggle
-                checked={prefs[key] ?? defaultOn}
-                onChange={() => toggle(key, needsPermission, defaultOn)}
+                checked={getGlobalPref(key) ?? defaultOn}
+                onChange={() => toggleGlobal(key, needsPermission, defaultOn)}
               />
             </div>
           ))}
         </div>
       </div>
+
+      <div>
+        <SectionLabel>Muted Servers &amp; Channels</SectionLabel>
+        {loading ? (
+          <div className="flex items-center gap-2 px-4 py-3 bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl">
+            <div className="w-4 h-4 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[#96989D] text-sm">Loading…</span>
+          </div>
+        ) : mutedPrefs.length === 0 ? (
+          <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4">
+            <p className="text-[#96989D] text-sm">
+              No muted servers or channels. Use the bell icon in any channel header to mute it.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {mutedPrefs.map(pref => (
+              <div key={pref.id} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {pref.channelId
+                    ? <Hash size={14} className="text-[#96989D] shrink-0" />
+                    : <BellOff size={14} className="text-[#96989D] shrink-0" />
+                  }
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[#1A1B1E] text-sm truncate">
+                      {pref.channelId ? 'Channel' : 'Server'}
+                      <span className="font-normal text-[#96989D] ml-1 font-mono text-xs">
+                        …{(pref.channelId ?? pref.serverId ?? '').slice(-6)}
+                      </span>
+                    </div>
+                    <div className="text-[#96989D] text-xs">
+                      {pref.mentionsOnly ? 'Mentions only' : 'All notifications muted'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  disabled={saving === (pref.channelId ?? pref.serverId)}
+                  onClick={() => handleUnmute(pref)}
+                  className="text-xs font-semibold text-[#E53935] hover:text-[#C62828] transition-colors shrink-0 disabled:opacity-50">
+                  Unmute
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-2xl p-4">
         <div className="text-[10px] font-bold uppercase tracking-widest text-[#96989D] mb-1">Quiet Hours</div>
         <p className="text-[#5C6068] text-sm">Coming soon — schedule times when Voxa won't send you any notifications.</p>

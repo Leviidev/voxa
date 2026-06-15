@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Hash, Plus, Smile, Bell, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil, Gamepad2, Flag } from 'lucide-react'
+import { Hash, Plus, Smile, Bell, BellOff, Pin, Users, Search, Volume2, Trash2, Edit3, Check, X, WifiOff, MessageSquare, Pencil, Gamepad2, Flag, FileText, Paperclip } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useSocket } from '../context/SocketContext.jsx'
 import { useMessages } from '../hooks/useMessages.js'
@@ -7,6 +7,7 @@ import { useTyping } from '../hooks/useTyping.js'
 import ThreadPanel from './ThreadPanel.jsx'
 import PinnedMessagesPanel from './PinnedMessagesPanel.jsx'
 import UserProfileCard from './UserProfileCard.jsx'
+import SearchPanel from './SearchPanel.jsx'
 import { api } from '../lib/api.js'
 import { useServers } from '../context/ServersContext.jsx'
 import clsx from 'clsx'
@@ -33,8 +34,14 @@ export default function ChatArea({ channel, server }) {
   const [topic, setTopic] = useState(channel?.topic ?? '')
   const [editingTopic, setEditingTopic] = useState(false)
   const [topicInput, setTopicInput] = useState('')
+  const [attachFile, setAttachFile] = useState(null)
+  const [showSearch, setShowSearch] = useState(false)
+  const [showNotifPane, setShowNotifPane] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isMentsOnly, setIsMentsOnly] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const prevChannelId = useRef(channel?.id)
   const isOwner = server?.ownerId === user?.id
 
@@ -44,8 +51,20 @@ export default function ChatArea({ channel, server }) {
     if (channel?.id !== prevChannelId.current) {
       setThreadMsgId(null)
       setShowPins(false)
+      setShowSearch(false)
+      setShowNotifPane(false)
+      setAttachFile(null)
     }
     prevChannelId.current = channel?.id
+  }, [channel?.id])
+
+  useEffect(() => {
+    if (!channel?.id) return
+    api.getNotifPrefs().then(prefs => {
+      const pref = prefs.find(p => p.channelId === channel.id)
+      setIsMuted(pref?.muted ?? false)
+      setIsMentsOnly(pref?.mentionsOnly ?? false)
+    }).catch(() => {})
   }, [channel?.id])
 
   useEffect(() => {
@@ -68,15 +87,23 @@ export default function ChatArea({ channel, server }) {
   const sendMessage = async (e) => {
     e.preventDefault()
     const text = input.trim()
-    if (!text || !user) return
+    if (!text && !attachFile) return
+    if (!user) return
+    const savedText = text
     setInput('')
     setSendError('')
     stopTyping()
     try {
-      await addMessage(text, user)
+      let attachment = null
+      if (attachFile) {
+        const data = await api.uploadAttachment(channel.id, attachFile)
+        attachment = { attachmentUrl: data.url, attachmentName: data.name, attachmentType: data.type }
+        setAttachFile(null)
+      }
+      await addMessage(savedText, user, attachment)
     } catch (err) {
       setSendError(err.message)
-      setInput(text)
+      if (!attachFile) setInput(savedText)
     }
   }
 
@@ -94,12 +121,16 @@ export default function ChatArea({ channel, server }) {
   const toggleMembers = () => {
     setShowMembers(v => !v)
     setShowPins(false)
+    setShowSearch(false)
+    setShowNotifPane(false)
     setThreadMsgId(null)
   }
 
   const togglePins = () => {
     setShowPins(v => !v)
     setShowMembers(false)
+    setShowSearch(false)
+    setShowNotifPane(false)
     setThreadMsgId(null)
   }
 
@@ -174,15 +205,20 @@ export default function ChatArea({ channel, server }) {
                 <span className="text-[10px] text-[#6B6E75] hidden sm:block">Live</span>
               </div>
             )}
-            <TopBtn icon={Bell} label="Notifications" />
+            <TopBtn icon={isMuted ? BellOff : Bell} label={isMuted ? 'Unmute channel' : 'Mute channel'} onClick={() => { setShowNotifPane(v => !v); setShowSearch(false) }} active={showNotifPane || isMuted} />
             <TopBtn icon={Pin} label="Pinned Messages" onClick={togglePins} active={showPins} />
             <TopBtn icon={Users} label="Members" onClick={toggleMembers} active={showMembers} />
             {isOwner && (
               <TopBtn icon={Pencil} label="Edit Topic" onClick={() => { setTopicInput(topic); setEditingTopic(true) }} />
             )}
-            <div className="mx-1 bg-white/[0.06] border border-white/[0.08] rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-text">
-              <Search size={12} className="text-[#6B6E75]" />
-              <span className="text-xs text-[#6B6E75] w-14 hidden sm:block">Search</span>
+            <div
+              onClick={() => { setShowSearch(v => !v); setShowNotifPane(false) }}
+              className={clsx(
+                'mx-1 border rounded-lg flex items-center px-2 h-7 gap-1.5 cursor-pointer transition-colors',
+                showSearch ? 'bg-white/[0.10] border-white/[0.14]' : 'bg-white/[0.06] border-white/[0.08] hover:bg-white/[0.08]'
+              )}>
+              <Search size={12} className={showSearch ? 'text-[#DBDEE1]' : 'text-[#6B6E75]'} />
+              <span className={clsx('text-xs w-14 hidden sm:block', showSearch ? 'text-[#DBDEE1]' : 'text-[#6B6E75]')}>Search</span>
             </div>
           </div>
         </div>
@@ -257,17 +293,43 @@ export default function ChatArea({ channel, server }) {
           )}
 
           <div className="px-4 pb-4 shrink-0">
+            {attachFile && (
+              <div className="mb-2">
+                <div className="inline-flex items-center gap-2 bg-[#2B2D31] border border-white/[0.08] rounded-xl px-3 py-2 max-w-xs">
+                  {attachFile.type.startsWith('image/')
+                    ? <img src={URL.createObjectURL(attachFile)} className="h-12 rounded-lg object-cover shrink-0" alt="preview" />
+                    : <FileText size={20} className="text-[#6B6E75] shrink-0" />
+                  }
+                  <div className="min-w-0">
+                    <span className="text-[#DBDEE1] text-xs truncate block max-w-[150px]">{attachFile.name}</span>
+                    <span className="text-[#6B6E75] text-[10px]">{(attachFile.size / 1024).toFixed(0)} KB</span>
+                  </div>
+                  <button onClick={() => setAttachFile(null)} className="text-[#6B6E75] hover:text-[#E53935] transition-colors ml-1 shrink-0">
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
             <form onSubmit={sendMessage}
               className="bg-[#383A40] border border-white/[0.06] rounded-xl flex items-center gap-2 px-4 focus-within:border-white/[0.12] transition-all">
-              <button type="button" className="text-[#6B6E75] hover:text-[#949BA4] py-3 shrink-0 transition-colors">
-                <Plus size={18} />
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+                className="text-[#6B6E75] hover:text-[#949BA4] py-3 shrink-0 transition-colors">
+                <Paperclip size={18} />
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,video/mp4,application/pdf,text/plain"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setAttachFile(f); e.target.value = '' }}
+              />
               <input
                 ref={inputRef}
                 value={input}
                 onChange={e => { setInput(e.target.value); onTyping() }}
                 onKeyDown={e => { if (e.key === 'Escape') { setInput(''); stopTyping() } }}
-                placeholder={`Message #${channel?.name ?? 'general'}`}
+                placeholder={attachFile ? 'Add a caption (optional)…' : `Message #${channel?.name ?? 'general'}`}
                 className="flex-1 bg-transparent text-[#DBDEE1] text-sm py-3 outline-none placeholder:text-[#6B6E75]"
                 maxLength={2000}
               />
@@ -291,6 +353,19 @@ export default function ChatArea({ channel, server }) {
         {showMembers && !threadMsgId && !showPins && server && (
           <MemberList members={server.members} onMemberClick={openProfile} />
         )}
+        {showSearch && !threadMsgId && channel && (
+          <SearchPanel channelId={channel.id} channelName={channel.name} onClose={() => setShowSearch(false)} />
+        )}
+        {showNotifPane && !threadMsgId && channel && (
+          <NotifPane
+            channelId={channel.id}
+            isMuted={isMuted}
+            setIsMuted={setIsMuted}
+            isMentsOnly={isMentsOnly}
+            setIsMentsOnly={setIsMentsOnly}
+            onClose={() => setShowNotifPane(false)}
+          />
+        )}
       </div>
 
       {/* User profile card */}
@@ -311,6 +386,87 @@ export default function ChatArea({ channel, server }) {
         />
       )}
     </div>
+  )
+}
+
+// ── Notification Pane ─────────────────────────────────────────────────────────
+function NotifPane({ channelId, isMuted, setIsMuted, isMentsOnly, setIsMentsOnly, onClose }) {
+  const [saving, setSaving] = useState(false)
+
+  const toggle = async (field, value) => {
+    setSaving(true)
+    const newMuted = field === 'muted' ? value : isMuted
+    const newMents = field === 'mentions' ? value : isMentsOnly
+    try {
+      await api.setNotifPref({ channelId, muted: newMuted, mentionsOnly: newMents })
+      if (field === 'muted') setIsMuted(value)
+      else setIsMentsOnly(value)
+    } catch (_) {}
+    setSaving(false)
+  }
+
+  return (
+    <div className="w-64 bg-[#2B2D31] border-l border-white/[0.06] flex flex-col shrink-0 overflow-hidden">
+      <div className="h-12 px-4 flex items-center justify-between border-b border-white/[0.06] shrink-0">
+        <span className="font-semibold text-sm text-white">Notifications</span>
+        <button onClick={onClose} className="text-[#6B6E75] hover:text-[#DBDEE1] transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+      <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        {[
+          { label: 'Mute channel', sub: 'No notifications from this channel', field: 'muted', val: isMuted },
+          { label: 'Mentions only', sub: 'Only notify you for @mentions', field: 'mentions', val: isMentsOnly },
+        ].map(({ label, sub, field, val }) => (
+          <div key={field} className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-[#DBDEE1]">{label}</div>
+              <div className="text-xs text-[#6B6E75] leading-relaxed mt-0.5">{sub}</div>
+            </div>
+            <button
+              disabled={saving}
+              onClick={() => toggle(field, !val)}
+              className={clsx(
+                'relative flex items-center w-10 h-5 rounded-full shrink-0 transition-colors focus:outline-none mt-0.5 disabled:opacity-50',
+                val ? 'bg-[#E53935]' : 'bg-white/[0.12]'
+              )}>
+              <span className={clsx(
+                'absolute w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform',
+                val ? 'translate-x-5' : 'translate-x-1'
+              )} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Message Attachment ────────────────────────────────────────────────────────
+function MsgAttachment({ url, name, type }) {
+  if (!url) return null
+  const isImage = type?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(url)
+  const isPDF = type === 'application/pdf' || url.endsWith('.pdf')
+  if (isImage) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-2 max-w-xs">
+        <img
+          src={url}
+          alt={name ?? 'attachment'}
+          className="rounded-xl max-h-64 max-w-full object-contain border border-white/[0.08] bg-[#2B2D31] cursor-zoom-in hover:opacity-90 transition-opacity"
+        />
+      </a>
+    )
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      className="mt-2 inline-flex items-center gap-2.5 bg-[#2B2D31] border border-white/[0.08] rounded-xl px-3 py-2 max-w-xs hover:bg-white/[0.06] transition-colors group">
+      <FileText size={18} className="text-[#6B6E75] shrink-0 group-hover:text-[#949BA4]" />
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-[#DBDEE1] truncate">{name ?? 'Attachment'}</div>
+        <div className="text-[10px] text-[#6B6E75]">{isPDF ? 'PDF' : 'File'} — click to open</div>
+      </div>
+    </a>
   )
 }
 
@@ -513,6 +669,7 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
           {msg.content}
           {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
+        {msg.attachmentUrl && <MsgAttachment url={msg.attachmentUrl} name={msg.attachmentName} type={msg.attachmentType} />}
         {pinBadge}
         {reactions}
         {threadSummary}
@@ -547,6 +704,7 @@ function Message({ msg, grouped, currentUserId, isOwn, isOwner, editing, editVal
           {msg.content}
           {msg.edited && <span className="text-[#6B6E75] text-[10px] ml-1">(edited)</span>}
         </p>
+        {msg.attachmentUrl && <MsgAttachment url={msg.attachmentUrl} name={msg.attachmentName} type={msg.attachmentType} />}
         {reactions}
         {threadSummary}
       </div>

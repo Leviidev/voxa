@@ -162,6 +162,45 @@ export const api = {
   deleteDmMessage: (dmId, msgId) =>
     request(`/dms/${dmId}/messages/${msgId}`, { method: 'DELETE' }),
 
+  // Message Search
+  searchMessages: (channelId, q) =>
+    request(`/messages/channels/${channelId}/search?q=${encodeURIComponent(q)}`),
+
+  // File Attachments
+  uploadAttachment: async (channelId, file) => {
+    const token = getToken()
+    const form = new FormData()
+    form.append('file', file)
+    let res
+    try {
+      res = await fetch(`${BASE}/messages/channels/${channelId}/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      })
+    } catch { throw new Error('Cannot reach the server.') }
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+    return data
+  },
+  sendMessageWithAttachment: (channelId, content, attachment) =>
+    request(`/messages/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, ...attachment }),
+    }),
+
+  // Channel Permission Overwrites
+  getChannelOverwrites: (channelId) => request(`/channels/${channelId}/overwrites`),
+  setChannelOverwrite: (channelId, roleId, allow, deny) =>
+    request(`/channels/${channelId}/overwrites/${roleId}`, { method: 'PUT', body: JSON.stringify({ allow, deny }) }),
+  deleteChannelOverwrite: (channelId, roleId) =>
+    request(`/channels/${channelId}/overwrites/${roleId}`, { method: 'DELETE' }),
+
+  // Notification Preferences
+  getNotifPrefs: () => request('/users/me/notifications'),
+  setNotifPref: (data) =>
+    request('/users/me/notifications', { method: 'PATCH', body: JSON.stringify(data) }),
+
   // Reports
   reportMessage: (messageId, reason) =>
     request('/reports', { method: 'POST', body: JSON.stringify({ messageId, reason }) }),

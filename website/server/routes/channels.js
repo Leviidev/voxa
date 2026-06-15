@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { createChannel, markChannelRead, getPinnedMessages, pinMessage, unpinMessage, updateChannelTopic, renameChannel, deleteChannel } from '../db.js'
+import { createChannel, markChannelRead, getPinnedMessages, pinMessage, unpinMessage, updateChannelTopic, renameChannel, deleteChannel, getChannelOverwrites, setChannelOverwrite, deleteChannelOverwrite } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
@@ -59,6 +59,24 @@ router.patch('/:channelId', async (req, res) => {
 
 router.delete('/:channelId', async (req, res) => {
   try { res.json(await deleteChannel(req.params.channelId, req.user.id)) }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+// ─── Channel Permission Overwrites ─────────────────────────────────────────────
+router.get('/:channelId/overwrites', async (req, res) => {
+  try { res.json(await getChannelOverwrites(req.params.channelId)) }
+  catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.put('/:channelId/overwrites/:roleId', async (req, res) => {
+  try {
+    const { allow = [], deny = [] } = req.body
+    res.json(await setChannelOverwrite(req.params.channelId, req.params.roleId, allow, deny, req.user.id))
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+router.delete('/:channelId/overwrites/:roleId', async (req, res) => {
+  try { res.json(await deleteChannelOverwrite(req.params.channelId, req.params.roleId, req.user.id)) }
   catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })
 

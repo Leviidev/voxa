@@ -8,14 +8,14 @@ description: Key architecture decisions, design system, and deployment notes for
 - **Monorepo**: `website/` (React+Vite frontend + Express API), `ios/` (Swift/SwiftUI), `android/` (Kotlin/Compose), `windows/` (Electron)
 - **Frontend**: React + Vite, port 5000. Workflow: "Start application" → `cd website && npm run dev`
 - **API**: Express in `website/server/`, port 3001. Workflow: "API Server" → `cd website && npm run api`
-- **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`)
+- **Vite proxy**: `/api` → `http://localhost:3001` (configured in `vite.config.js`), also `/uploads` → `http://localhost:3001`
 - **Auth**: JWT via `jsonwebtoken`, middleware at `server/middleware/auth.js`, JWT_SECRET stored as Replit secret, tokens stored in localStorage as `voxa_token`
 - **Persistence**: Replit PostgreSQL via `pg` Pool (`DATABASE_URL` env var). All db.js functions are async — all route handlers must use `async/await`.
 - **Rate limiting**: express-rate-limit — auth: 8/15min, general: 200/5min, messages: 30/min
 
 ## Database Schema (PostgreSQL)
 
-Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `friend_requests`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`, `reports`, `releases`
+Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_reactions`, `server_members`, `roles`, `member_roles`, `invites`, `dm_channels`, `dm_participants`, `dm_messages`, `friend_requests`, `password_resets`, `email_verifications`, `totp_backup_codes`, `passkeys`, `webauthn_challenges`, `reports`, `releases`, `channel_overwrites`, `notification_prefs`
 
 **reports table:** `id UUID PK DEFAULT gen_random_uuid(), reporter_id TEXT REFERENCES users, message_id TEXT, user_id TEXT REFERENCES users, reason TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMPTZ`. DB functions: `createReport({reporterId, messageId, userId, reason})`, `getReports({status?})`. Route: `POST /api/reports` (authenticated). API client methods: `api.reportMessage(messageId, reason)`, `api.reportUser(userId, reason)`.
 
@@ -23,9 +23,35 @@ Tables: `users`, `servers`, `categories`, `channels`, `messages`, `message_react
 - Snake_case columns in DB; camelCase in API responses (mapped in db.js)
 - All `db.js` functions return Promises — every route handler must `await` them
 
-**Key messages quirk:** The `messages` table stores denormalized author info (`author`, `display_name`, `avatar_url`, `avatar_color`, `discriminator`, `timestamp`, `edited`, `parent_id`) — NOT just a foreign key.
+**Key messages quirk:** The `messages` table stores denormalized author info (`author`, `display_name`, `avatar_url`, `avatar_color`, `discriminator`, `timestamp`, `edited`, `parent_id`) — NOT just a foreign key. Also has `attachment_url`, `attachment_name`, `attachment_type` columns (nullable).
 
-**users table security columns:** `email_verified BOOLEAN`, `totp_secret TEXT`, `totp_enabled BOOLEAN`
+**users table security columns:** `email_verified BOOLEAN`, `totp_secret TEXT`, `totp_enabled BOOLEAN`, `game_activity TEXT` (nullable)
+
+**channel_overwrites table:** `channel_id TEXT REFERENCES channels, role_id TEXT REFERENCES roles, allow TEXT[], deny TEXT[], PRIMARY KEY (channel_id, role_id)`. DB functions: `getChannelOverwrites(channelId)`, `setChannelOverwrite(channelId, roleId, allow, deny, userId)`, `deleteChannelOverwrite(channelId, roleId, userId)`. Routes at `GET/PUT/DELETE /api/channels/:channelId/overwrites/:roleId`.
+
+**notification_prefs table:** `id TEXT PK, user_id TEXT, server_id TEXT, channel_id TEXT, muted BOOLEAN, mentions_only BOOLEAN`. NULL-safe unique index on (user_id, COALESCE(server_id,''), COALESCE(channel_id,'')). DB functions: `getNotificationPrefs(userId)`, `setNotificationPref(userId, {...})`. Routes: `GET/PATCH /api/users/me/notifications`.
+
+## File Attachments
+
+- Multer in `server/routes/messages.js` — `POST /api/messages/channels/:channelId/upload` accepts `file` field, max 8MB
+- Files stored at `website/server/uploads/`, served as `/uploads` static (both from Express and proxied via Vite)
+- Frontend: `api.uploadAttachment(channelId, file)` → `{ url, name, type }`, then passed as attachment object to `addMessage`
+- `useMessages.js` `addMessage(content, user, attachment)` calls `api.sendMessageWithAttachment` when attachment present
+- `MsgAttachment` component in ChatArea renders images inline (clickable zoom) and files as download cards
+- Message search: `GET /api/messages/channels/:channelId/search?q=` → SearchPanel component in right panel
+
+## Notification Preferences
+
+- Bell icon in ChatArea header opens `NotifPane` right panel (mute + mentions-only toggles per channel)
+- Bell icon shows `BellOff` and red-highlighted when channel is muted
+- `NotificationSettings` in Me.jsx shows global prefs (localStorage) + API-backed muted servers/channels list
+- `api.getNotifPrefs()` / `api.setNotifPref({ channelId?, serverId?, muted, mentionsOnly })`
+
+## Channel Permission Overwrites
+
+- Shield button per channel in ServerSettingsModal → ChannelsTab → opens `ChannelOverwritePane` inline
+- Per-role allow/deny toggles for: send_messages, read_history, manage_messages, administrator
+- `api.getChannelOverwrites(channelId)` / `api.setChannelOverwrite(channelId, roleId, allow, deny)`
 
 ## Deployment
 
@@ -113,11 +139,12 @@ All UI components now use a cohesive dark theme matching Discord's palette:
 ## Game Activity (backend + frontend)
 
 - DB column: `users.game_activity TEXT` (nullable)
-- `updateGameActivity(userId, game)` in `db.js`; `publicUser()` includes `gameActivity` in all user responses
-- API route: `PATCH /api/users/me/activity` (in `website/server/routes/activity.js`), requires Bearer auth
-- On update: emits `activity:update { userId, game }` to all `srv:{serverId}` rooms the user is in
+- `updateUser` in `db.js` includes `gameActivity` field; `publicUser()` includes `gameActivity` in all user responses
+- API routes: `PATCH /api/users/me` accepts `gameActivity` (in `website/server/routes/users.js`), also `PATCH /api/users/me/activity` (in `website/server/routes/activity.js`)
+- On update via `/api/users/me`: emits `activity:update { userId, game }` socket event
 - Frontend: `UserProfileCard.jsx` shows green "Playing X" badge with Gamepad2 icon when `member.gameActivity` is set
-- Electron integration: `AuthContext.jsx` calls `window.electronVoxa?.reportToken(token)` on login/register and `window.electronVoxa?.clearToken()` on logout
+- `GameActivitySection` component in Me.jsx AccountSettings — text input + save button, calls `api.updateProfile({ gameActivity })`
+- Electron integration: `AuthContext.jsx` calls `window.electronVoxa?.reportToken(token)` on login/register
 
 ## Message & User Reporting
 

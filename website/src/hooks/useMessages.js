@@ -104,7 +104,7 @@ export function useMessages(channelId) {
   }, [socket, channelId])
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const addMessage = async (content, user) => {
+  const addMessage = async (content, user, attachment = null) => {
     const optimistic = {
       id: 'opt_' + Date.now(),
       author: user.username,
@@ -118,11 +118,16 @@ export function useMessages(channelId) {
       timestamp: new Date().toISOString(),
       edited: false,
       reactions: {},
+      attachmentUrl: attachment?.attachmentUrl ?? null,
+      attachmentName: attachment?.attachmentName ?? null,
+      attachmentType: attachment?.attachmentType ?? null,
     }
     setMessages(prev => [...prev, optimistic])
 
     try {
-      const real = await api.sendMessage(channelId, content)
+      const real = attachment
+        ? await api.sendMessageWithAttachment(channelId, content, attachment)
+        : await api.sendMessage(channelId, content)
       setMessages(prev => {
         const next = prev.map(m => m.id === optimistic.id ? real : m)
         try { localStorage.setItem(`voxa_msgs_${channelId}`, JSON.stringify(next)) } catch (_) {}

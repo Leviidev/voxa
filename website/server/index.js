@@ -154,6 +154,9 @@ function clearTyping(channelId, userId, socket) {
 // Expose io to route handlers
 app.locals.io = io
 
+// ─── Uploads (file attachments) ───────────────────────────────────────────────
+app.use('/uploads', express.static(join(__dirname, 'uploads')))
+
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
 const authLimiter = rateLimit({
   windowMs: 60 * 1000, max: 8,

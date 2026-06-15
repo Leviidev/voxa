@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, MessageSquare, LogOut } from 'lucide-react'
+import { Plus, MessageSquare, LogOut, Compass } from 'lucide-react'
 import { useServers } from '../context/ServersContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useUnread } from '../context/UnreadContext.jsx'
 import CreateServerModal from './CreateServerModal.jsx'
+import ServerDiscoveryModal from './ServerDiscoveryModal.jsx'
 import clsx from 'clsx'
 
 const ACCENT_COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899']
@@ -49,6 +50,7 @@ export default function ServerSidebar() {
   const { user, logout } = useAuth()
   const { unread } = useUnread()
   const [showCreate, setShowCreate] = useState(false)
+  const [showDiscover, setShowDiscover] = useState(false)
 
   const serverHasUnread = (srv) =>
     srv.categories.flatMap(c => c.channels).some(ch => (unread.channels[ch.id] ?? 0) > 0)
@@ -140,8 +142,8 @@ export default function ServerSidebar() {
           )}
         </div>
 
-        {/* Add server button */}
-        <div className="px-2 pb-2">
+        {/* Add server / Discover buttons */}
+        <div className="px-2 pb-2 space-y-0.5">
           <button
             onClick={() => setShowCreate(true)}
             className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.05] transition-all group"
@@ -150,7 +152,18 @@ export default function ServerSidebar() {
               <Plus size={13} className="text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors" />
             </div>
             <span className="text-sm font-medium text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors">
-              Add a server
+              Create server
+            </span>
+          </button>
+          <button
+            onClick={() => setShowDiscover(true)}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white/[0.05] transition-all group"
+          >
+            <div className="w-7 h-7 rounded-lg border border-white/[0.10] flex items-center justify-center shrink-0">
+              <Compass size={13} className="text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors" />
+            </div>
+            <span className="text-sm font-medium text-[#6B6E75] group-hover:text-[#DBDEE1] transition-colors">
+              Discover
             </span>
           </button>
         </div>
@@ -178,6 +191,7 @@ export default function ServerSidebar() {
       </div>
 
       {showCreate && <CreateServerModal onClose={() => setShowCreate(false)} />}
+      {showDiscover && <ServerDiscoveryModal onClose={() => setShowDiscover(false)} />}
     </>
   )
 }

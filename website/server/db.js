@@ -103,11 +103,12 @@ export async function updateUser(userId, fields) {
   const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [userId])
   if (!rows.length) throw Object.assign(new Error('User not found'), { status: 404 })
 
-  const allowed = ['displayName', 'bio', 'customStatus', 'avatarUrl', 'avatarColor', 'bannerUrl', 'bannerColor', 'status']
+  const allowed = ['displayName', 'bio', 'customStatus', 'avatarUrl', 'avatarColor', 'bannerUrl', 'bannerColor', 'status', 'gameActivity']
   const colMap = {
     displayName: 'display_name', bio: 'bio', customStatus: 'custom_status',
     avatarUrl: 'avatar_url', avatarColor: 'avatar_color',
     bannerUrl: 'banner_url', bannerColor: 'banner_color', status: 'status',
+    gameActivity: 'game_activity',
   }
   const validStatuses = ['online', 'idle', 'dnd', 'offline']
 
@@ -575,6 +576,9 @@ function shapeMessage(m) {
     parentId: m.parent_id ?? null,
     replyCount: Number(m.reply_count ?? 0),
     reactions: shapeReactions(m.reactions),
+    attachmentUrl: m.attachment_url ?? null,
+    attachmentName: m.attachment_name ?? null,
+    attachmentType: m.attachment_type ?? null,
   }
 }
 
@@ -600,18 +604,19 @@ export async function getMessages(channelId, limit = 50) {
   return rows.map(shapeMessage)
 }
 
-export async function createMessage({ channelId, userId, content, parentId = null }) {
+export async function createMessage({ channelId, userId, content, parentId = null, attachmentUrl = null, attachmentName = null, attachmentType = null }) {
   const { rows: [channel] } = await pool.query('SELECT * FROM channels WHERE id=$1', [channelId])
   if (!channel) throw Object.assign(new Error('Channel not found'), { status: 404 })
   const { rows: [user] } = await pool.query('SELECT * FROM users WHERE id=$1', [userId])
 
   const id = generateId('msg_')
   const { rows: [msg] } = await pool.query(
-    `INSERT INTO messages (id, channel_id, author_id, author, display_name, avatar_url, avatar_color, discriminator, content, timestamp, edited, parent_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),false,$10) RETURNING *`,
+    `INSERT INTO messages (id, channel_id, author_id, author, display_name, avatar_url, avatar_color, discriminator, content, timestamp, edited, parent_id, attachment_url, attachment_name, attachment_type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),false,$10,$11,$12,$13) RETURNING *`,
     [id, channelId, userId, user?.username ?? 'Unknown', user?.display_name ?? null,
      user?.avatar_url ?? null, user?.avatar_color ?? null,
-     user?.discriminator ?? '0000', sanitize(content, 2000), parentId ?? null]
+     user?.discriminator ?? '0000', sanitize(content, 2000), parentId ?? null,
+     attachmentUrl ?? null, attachmentName ?? null, attachmentType ?? null]
   )
   return shapeMessage({ ...msg, reply_count: 0, reactions: {} })
 }
@@ -667,6 +672,26 @@ export async function deleteMessage(msgId, userId) {
   if (msg.author_id !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   await pool.query('DELETE FROM messages WHERE id=$1', [msgId])
   return { channelId: msg.channel_id }
+}
+
+export async function searchMessages(channelId, query, limit = 25) {
+  if (!query?.trim()) return []
+  const search = `%${query.toLowerCase()}%`
+  const { rows } = await pool.query(
+    `SELECT m.*,
+       (SELECT COUNT(*) FROM messages r WHERE r.parent_id = m.id) AS reply_count,
+       COALESCE(
+         (SELECT jsonb_object_agg(emoji, jsonb_build_object('count', cnt, 'userIds', user_ids))
+          FROM (SELECT emoji, COUNT(*) AS cnt, array_agg(user_id::text) AS user_ids
+                FROM message_reactions WHERE message_id = m.id GROUP BY emoji) sub
+         ), '{}'::jsonb
+       ) AS reactions
+     FROM messages m
+     WHERE m.channel_id = $1 AND lower(m.content) LIKE $2 AND m.parent_id IS NULL
+     ORDER BY m.timestamp DESC LIMIT $3`,
+    [channelId, search, limit]
+  )
+  return rows.map(shapeMessage)
 }
 
 // ─── Reactions ────────────────────────────────────────────────────────────────
@@ -1434,4 +1459,106 @@ export async function removeFriend(userId, friendUserId) {
     [userId, friendUserId]
   )
   return { ok: true }
+}
+
+// ─── Channel Permission Overwrites ────────────────────────────────────────────
+
+export async function getChannelOverwrites(channelId) {
+  const { rows } = await pool.query(
+    `SELECT co.*, r.name AS role_name, r.color AS role_color
+     FROM channel_overwrites co
+     JOIN roles r ON r.id = co.role_id
+     WHERE co.channel_id = $1
+     ORDER BY r.position`,
+    [channelId]
+  )
+  return rows.map(r => ({
+    channelId: r.channel_id, roleId: r.role_id,
+    roleName: r.role_name, roleColor: r.role_color,
+    allow: r.allow ?? [], deny: r.deny ?? [],
+  }))
+}
+
+export async function setChannelOverwrite(channelId, roleId, allow, deny, userId) {
+  const { rows: [ch] } = await pool.query('SELECT server_id FROM channels WHERE id=$1', [channelId])
+  if (!ch) throw Object.assign(new Error('Channel not found'), { status: 404 })
+  const { rows: [server] } = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [ch.server_id])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  const { rows: adminRole } = await pool.query(
+    `SELECT mr.role_id FROM member_roles mr
+     JOIN roles r ON r.id = mr.role_id
+     WHERE mr.server_id = $1 AND mr.user_id = $2
+       AND (r.permissions @> ARRAY['administrator'] OR r.permissions @> ARRAY['manage_channels'])`,
+    [ch.server_id, userId]
+  )
+  if (server.owner_id !== userId && !adminRole.length)
+    throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query(
+    `INSERT INTO channel_overwrites (channel_id, role_id, allow, deny)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (channel_id, role_id) DO UPDATE SET allow = $3, deny = $4`,
+    [channelId, roleId, allow ?? [], deny ?? []]
+  )
+  const { rows: [result] } = await pool.query(
+    `SELECT co.*, r.name AS role_name, r.color AS role_color
+     FROM channel_overwrites co JOIN roles r ON r.id = co.role_id
+     WHERE co.channel_id = $1 AND co.role_id = $2`,
+    [channelId, roleId]
+  )
+  return {
+    channelId: result.channel_id, roleId: result.role_id,
+    roleName: result.role_name, roleColor: result.role_color,
+    allow: result.allow, deny: result.deny,
+  }
+}
+
+export async function deleteChannelOverwrite(channelId, roleId, userId) {
+  const { rows: [ch] } = await pool.query('SELECT server_id FROM channels WHERE id=$1', [channelId])
+  if (!ch) throw Object.assign(new Error('Channel not found'), { status: 404 })
+  const { rows: [server] } = await pool.query('SELECT owner_id FROM servers WHERE id=$1', [ch.server_id])
+  if (server?.owner_id !== userId)
+    throw Object.assign(new Error('Forbidden'), { status: 403 })
+  await pool.query('DELETE FROM channel_overwrites WHERE channel_id=$1 AND role_id=$2', [channelId, roleId])
+  return { ok: true }
+}
+
+// ─── Notification Preferences ─────────────────────────────────────────────────
+
+export async function getNotificationPrefs(userId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM notification_prefs WHERE user_id = $1`,
+    [userId]
+  )
+  return rows.map(r => ({
+    id: r.id, serverId: r.server_id, channelId: r.channel_id,
+    muted: r.muted, mentionsOnly: r.mentions_only,
+  }))
+}
+
+export async function setNotificationPref(userId, { serverId = null, channelId = null, muted = false, mentionsOnly = false }) {
+  const { rows: existing } = await pool.query(
+    `SELECT id FROM notification_prefs
+     WHERE user_id = $1
+       AND COALESCE(server_id, '') = COALESCE($2, '')
+       AND COALESCE(channel_id, '') = COALESCE($3, '')`,
+    [userId, serverId, channelId]
+  )
+  if (existing.length) {
+    const { rows: [r] } = await pool.query(
+      `UPDATE notification_prefs SET muted=$1, mentions_only=$2
+       WHERE user_id=$3
+         AND COALESCE(server_id,'') = COALESCE($4,'')
+         AND COALESCE(channel_id,'') = COALESCE($5,'')
+       RETURNING *`,
+      [muted, mentionsOnly, userId, serverId, channelId]
+    )
+    return { id: r.id, serverId: r.server_id, channelId: r.channel_id, muted: r.muted, mentionsOnly: r.mentions_only }
+  }
+  const id = generateId('np_')
+  const { rows: [r] } = await pool.query(
+    `INSERT INTO notification_prefs (id, user_id, server_id, channel_id, muted, mentions_only)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [id, userId, serverId, channelId, muted, mentionsOnly]
+  )
+  return { id: r.id, serverId: r.server_id, channelId: r.channel_id, muted: r.muted, mentionsOnly: r.mentions_only }
 }

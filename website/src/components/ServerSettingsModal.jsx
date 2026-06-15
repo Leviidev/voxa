@@ -399,6 +399,7 @@ function ChannelsTab({ server, isOwner, onRefresh }) {
   const [editName, setEditName] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [overwriteChannelId, setOverwriteChannelId] = useState(null)
 
   const startEdit = (ch) => {
     setEditingId(ch.id)
@@ -453,6 +454,17 @@ function ChannelsTab({ server, isOwner, onRefresh }) {
                     <span className="flex-1 text-sm font-medium text-[#1A1B1E] truncate">{ch.name}</span>
                     {isOwner && (
                       <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setOverwriteChannelId(v => v === ch.id ? null : ch.id)}
+                          title="Channel permissions"
+                          className={clsx(
+                            'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                            overwriteChannelId === ch.id
+                              ? 'bg-[#E53935]/10 text-[#E53935]'
+                              : 'hover:bg-[#EAEBEE] text-[#96989D] hover:text-[#5C6068]'
+                          )}>
+                          <Shield size={12} />
+                        </button>
                         <button onClick={() => editingId === ch.id ? cancelEdit() : startEdit(ch)}
                           className="w-7 h-7 rounded-lg hover:bg-[#EAEBEE] flex items-center justify-center text-[#96989D] hover:text-[#5C6068] transition-colors">
                           <Edit3 size={12} />
@@ -480,6 +492,13 @@ function ChannelsTab({ server, isOwner, onRefresh }) {
                       <button onClick={cancelEdit} className="text-[#5C6068] text-xs font-medium shrink-0">Cancel</button>
                     </div>
                   )}
+                  {overwriteChannelId === ch.id && (
+                    <ChannelOverwritePane
+                      channel={ch}
+                      roles={server?.roles ?? []}
+                      onClose={() => setOverwriteChannelId(null)}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -494,6 +513,103 @@ function ChannelsTab({ server, isOwner, onRefresh }) {
       {!isOwner && (
         <p className="text-xs text-[#96989D] text-center mt-2">Only the server owner can rename or delete channels.</p>
       )}
+    </div>
+  )
+}
+
+// ─── Channel Overwrite Pane ────────────────────────────────────────────────────
+const OVERWRITE_PERMS = [
+  { key: 'send_messages', label: 'Send Messages' },
+  { key: 'read_history', label: 'Read Message History' },
+  { key: 'manage_messages', label: 'Manage Messages' },
+  { key: 'administrator', label: 'Administrator' },
+]
+
+function ChannelOverwritePane({ channel, roles, onClose }) {
+  const [overwrites, setOverwrites] = useState([])
+  const [saving, setSaving] = useState(null)
+
+  useEffect(() => {
+    api.getChannelOverwrites(channel.id).then(setOverwrites).catch(() => {})
+  }, [channel.id])
+
+  const getOw = (roleId) => overwrites.find(o => o.roleId === roleId) ?? { allow: [], deny: [] }
+
+  const togglePerm = async (roleId, perm, mode) => {
+    setSaving(roleId + perm + mode)
+    const ow = getOw(roleId)
+    let allow = [...(ow.allow ?? [])]
+    let deny = [...(ow.deny ?? [])]
+    if (mode === 'allow') {
+      allow = allow.includes(perm) ? allow.filter(p => p !== perm) : [...allow.filter(p => p !== perm), perm]
+      deny = deny.filter(p => p !== perm)
+    } else {
+      deny = deny.includes(perm) ? deny.filter(p => p !== perm) : [...deny.filter(p => p !== perm), perm]
+      allow = allow.filter(p => p !== perm)
+    }
+    try {
+      const updated = await api.setChannelOverwrite(channel.id, roleId, allow, deny)
+      setOverwrites(prev => {
+        const idx = prev.findIndex(o => o.roleId === roleId)
+        return idx >= 0 ? prev.map((o, i) => i === idx ? updated : o) : [...prev, updated]
+      })
+    } catch (_) {}
+    setSaving(null)
+  }
+
+  const allRoles = roles.length > 0 ? roles : []
+
+  return (
+    <div className="bg-[#FFF5F5] border border-[#FECDD3] rounded-xl p-4 mt-1.5 mb-1">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="font-semibold text-[#1A1B1E] text-sm">Permissions — #{channel.name}</div>
+          <div className="text-[10px] text-[#96989D] mt-0.5">Override role permissions for this channel</div>
+        </div>
+        <button onClick={onClose} className="text-[#96989D] hover:text-[#1A1B1E] transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+      {allRoles.length === 0 && (
+        <p className="text-xs text-[#96989D]">No roles found. Create roles in the Roles tab first.</p>
+      )}
+      {allRoles.map(role => {
+        const ow = getOw(role.id)
+        return (
+          <div key={role.id} className="mb-3 last:mb-0">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: role.color ?? '#96989D' }} />
+              <span className="text-xs font-semibold text-[#1A1B1E]">{role.name}</span>
+            </div>
+            <div className="space-y-1">
+              {OVERWRITE_PERMS.map(({ key, label }) => {
+                const allowed = ow.allow?.includes(key)
+                const denied = ow.deny?.includes(key)
+                const sKey = role.id + key
+                return (
+                  <div key={key} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-[#E3E5E8]">
+                    <span className="text-xs text-[#5C6068] flex-1">{label}</span>
+                    <div className="flex items-center gap-1">
+                      <button disabled={saving === sKey + 'allow'} onClick={() => togglePerm(role.id, key, 'allow')}
+                        title="Allow"
+                        className={clsx('w-6 h-6 rounded text-[11px] font-bold transition-colors border',
+                          allowed ? 'bg-green-100 text-green-700 border-green-300' : 'bg-[#F7F8FA] text-[#96989D] border-[#E3E5E8] hover:bg-green-50 hover:text-green-700')}>
+                        ✓
+                      </button>
+                      <button disabled={saving === sKey + 'deny'} onClick={() => togglePerm(role.id, key, 'deny')}
+                        title="Deny"
+                        className={clsx('w-6 h-6 rounded text-[11px] font-bold transition-colors border',
+                          denied ? 'bg-red-100 text-[#E53935] border-red-300' : 'bg-[#F7F8FA] text-[#96989D] border-[#E3E5E8] hover:bg-red-50 hover:text-[#E53935]')}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
