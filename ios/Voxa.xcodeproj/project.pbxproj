@@ -23,6 +23,9 @@
                 A000000E0000000000000001 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000E0000000000000000 /* ProfileView.swift */; };
                 A000000F0000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A000000F0000000000000000 /* Assets.xcassets */; };
                 A00000200000000000000001 /* DMViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000200000000000000000 /* DMViewModel.swift */; };
+                A00000300000000000000001 /* FriendsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000300000000000000000 /* FriendsViewModel.swift */; };
+                A00000400000000000000001 /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000400000000000000000 /* FriendsView.swift */; };
+                A00000500000000000000001 /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000500000000000000000 /* ServerSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +36,9 @@
                 A00000050000000000000000 /* ServersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServersViewModel.swift; sourceTree = "<group>"; };
                 A00000060000000000000000 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
                 A00000200000000000000000 /* DMViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMViewModel.swift; sourceTree = "<group>"; };
+                A00000300000000000000000 /* FriendsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsViewModel.swift; sourceTree = "<group>"; };
+                A00000400000000000000000 /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
+                A00000500000000000000000 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
                 A00000070000000000000000 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
                 A00000080000000000000000 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
                 A00000090000000000000000 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
@@ -95,6 +101,7 @@
                                 A00000050000000000000000 /* ServersViewModel.swift */,
                                 A00000060000000000000000 /* ChatViewModel.swift */,
                                 A00000200000000000000000 /* DMViewModel.swift */,
+                                A00000300000000000000000 /* FriendsViewModel.swift */,
                         );
                         path = ViewModels;
                         sourceTree = "<group>";
@@ -125,6 +132,7 @@
                                 A000000B0000000000000000 /* ChannelListView.swift */,
                                 A000000C0000000000000000 /* ChatView.swift */,
                                 A000000D0000000000000000 /* DMView.swift */,
+                                A00000400000000000000000 /* FriendsView.swift */,
                         );
                         path = Main;
                         sourceTree = "<group>";
@@ -133,6 +141,7 @@
                         isa = PBXGroup;
                         children = (
                                 A000000E0000000000000000 /* ProfileView.swift */,
+                                A00000500000000000000000 /* ServerSettingsView.swift */,
                         );
                         path = Settings;
                         sourceTree = "<group>";
@@ -237,6 +246,9 @@
                                 A000000D0000000000000001 /* DMView.swift in Sources */,
                                 A000000E0000000000000001 /* ProfileView.swift in Sources */,
                                 A00000200000000000000001 /* DMViewModel.swift in Sources */,
+                                A00000300000000000000001 /* FriendsViewModel.swift in Sources */,
+                                A00000400000000000000001 /* FriendsView.swift in Sources */,
+                                A00000500000000000000001 /* ServerSettingsView.swift in Sources */,
                         );
                         runOnlyForDeploymentPostprocessing = 0;
                 };

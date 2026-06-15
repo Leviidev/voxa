@@ -18,15 +18,15 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystoreFile = System.getenv("KEYSTORE_FILE") ?: "${rootDir}/voxa-release.keystore"
-            val keystorePass = System.getenv("KEYSTORE_PASSWORD") ?: "voxa_release"
-            val keyAlias = System.getenv("KEY_ALIAS") ?: "voxa"
-            val keyPass = System.getenv("KEY_PASSWORD") ?: "voxa_release"
+            val ksFile = System.getenv("KEYSTORE_FILE") ?: "${rootDir}/voxa-release.keystore"
+            val ksPass = System.getenv("KEYSTORE_PASSWORD") ?: "voxa_release"
+            val ksAlias = System.getenv("KEY_ALIAS") ?: "voxa"
+            val ksKeyPass = System.getenv("KEY_PASSWORD") ?: "voxa_release"
 
-            storeFile = file(keystoreFile)
-            storePassword = keystorePass
-            keyAlias = keyAlias
-            keyPassword = keyPass
+            storeFile = file(ksFile)
+            storePassword = ksPass
+            keyAlias = ksAlias
+            keyPassword = ksKeyPass
         }
     }
 
@@ -37,12 +37,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val releaseConfig = signingConfigs.findByName("release")
-            if (releaseConfig != null && file(releaseConfig.storeFile!!).exists()) {
-                signingConfig = releaseConfig
-            } else {
-                signingConfig = signingConfigs.getByName("debug")
+            val ksPath = System.getenv("KEYSTORE_FILE")
+            if (ksPath != null && file(ksPath).exists()) {
+                signingConfig = signingConfigs.getByName("release")
             }
+            // No signingConfig when no keystore → produces app-release-unsigned.apk
         }
         debug {
             applicationIdSuffix = ".debug"
