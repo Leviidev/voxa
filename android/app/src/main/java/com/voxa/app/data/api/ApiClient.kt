@@ -106,6 +106,18 @@ object ApiClient {
     suspend fun joinByInvite(code: String): Result<VoxaServer> =
         postMap("/api/invites/$code/join", emptyMap()) { json.decodeFromString(it) }
 
+    suspend fun discoverServers(query: String = "", category: String = ""): Result<List<DiscoverableServer>> {
+        val params = buildList {
+            if (query.isNotEmpty()) add("q=${java.net.URLEncoder.encode(query, "UTF-8")}")
+            if (category.isNotEmpty() && category != "all") add("category=${java.net.URLEncoder.encode(category, "UTF-8")}")
+        }
+        val qs = if (params.isEmpty()) "" else "?" + params.joinToString("&")
+        return get("/api/servers/discover$qs") { json.decodeFromString(it) }
+    }
+
+    suspend fun joinPublicServer(id: String): Result<VoxaServer> =
+        postMap("/api/servers/$id/join-public", emptyMap()) { json.decodeFromString(it) }
+
     // -----------------------------------------------------------------------
     // Messages
     // -----------------------------------------------------------------------

@@ -224,6 +224,33 @@ fun avatarColorForName(name: String): Long {
 }
 
 // ---------------------------------------------------------------------------
+// Server Discovery
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class DiscoverableServer(
+    val id: String,
+    val name: String,
+    @SerialName("iconUrl")    val iconUrl: String? = null,
+    @SerialName("iconColor")  val iconColor: String? = null,
+    val description: String? = null,
+    @SerialName("bannerUrl")  val bannerUrl: String? = null,
+    @SerialName("bannerColor") val bannerColor: String? = null,
+    val category: String? = null,
+    @SerialName("memberCount") val memberCount: Int = 0,
+    val roles: List<DiscoveryRole> = emptyList(),
+) {
+    val acronym get() = name.split(" ").take(2)
+        .mapNotNull { it.firstOrNull()?.uppercaseChar()?.toString() }.joinToString("")
+}
+
+@Serializable
+data class DiscoveryRole(
+    val name: String,
+    val color: String? = null,
+)
+
+// ---------------------------------------------------------------------------
 // Friends
 // ---------------------------------------------------------------------------
 

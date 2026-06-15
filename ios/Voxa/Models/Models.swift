@@ -312,6 +312,45 @@ extension Color {
     }
 }
 
+// MARK: - Server Discovery
+
+struct DiscoverableServer: Codable, Identifiable {
+    let id: String
+    var name: String
+    var iconUrl: String?
+    var iconColor: String?
+    var description: String?
+    var bannerUrl: String?
+    var bannerColor: String?
+    var category: String?
+    var memberCount: Int
+    var roles: [DiscoveryRole]
+
+    var acronym: String {
+        name.split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first.map(String.init) }
+            .joined()
+            .uppercased()
+    }
+
+    var accentColor: Color {
+        if let hex = iconColor, !hex.isEmpty {
+            return Color(hex: hex.replacingOccurrences(of: "#", with: ""))
+        }
+        let colors: [Color] = [
+            Color(hex: "E53935"), Color(hex: "6366F1"), Color(hex: "10B981"),
+            Color(hex: "F59E0B"), Color(hex: "3B82F6"), Color(hex: "8B5CF6"), Color(hex: "EC4899"),
+        ]
+        return colors[abs(name.hashValue) % colors.count]
+    }
+}
+
+struct DiscoveryRole: Codable {
+    var name: String
+    var color: String?
+}
+
 // MARK: - Friends
 
 struct FriendUser: Codable, Identifiable {

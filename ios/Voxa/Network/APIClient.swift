@@ -205,6 +205,37 @@ actor APIClient {
         try await performVoid("/api/dms/\(dmId)/read", method: "POST", body: Empty())
     }
 
+    // MARK: - Discovery
+
+    func discoverServers(query: String = "", category: String = "") async throws -> [DiscoverableServer] {
+        var parts: [String] = []
+        if !query.isEmpty, let enc = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            parts.append("q=\(enc)")
+        }
+        if !category.isEmpty && category != "all",
+           let enc = category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            parts.append("category=\(enc)")
+        }
+        let qs = parts.isEmpty ? "" : "?" + parts.joined(separator: "&")
+        let urlStr = baseURL.absoluteString + "/api/servers/discover" + qs
+        guard let url = URL(string: urlStr) else { throw APIError.invalidResponse }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = authToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.timeoutInterval = 15
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.invalidResponse
+        }
+        return try Self.decoder.decode([DiscoverableServer].self, from: data)
+    }
+
+    func joinPublicServer(id: String) async throws -> VoxaServer {
+        struct Empty: Encodable {}
+        return try await perform("/api/servers/\(id)/join-public", method: "POST", body: Empty())
+    }
+
     // MARK: - Servers (update)
 
     func updateServer(id: String, name: String?, iconUrl: String?) async throws {

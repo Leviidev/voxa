@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxa.app.data.api.ApiClient
 import com.voxa.app.data.api.SocketClient
+import com.voxa.app.data.model.DiscoverableServer
 import com.voxa.app.data.model.VoxaChannel
 import com.voxa.app.data.model.VoxaServer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,4 +79,45 @@ class ServersViewModel : ViewModel() {
     }
 
     fun clearError() { _error.value = null }
+
+    // ── Discovery ───────────────────────────────────────────────────────────
+
+    private val _discoveryServers  = MutableStateFlow<List<DiscoverableServer>>(emptyList())
+    val discoveryServers: StateFlow<List<DiscoverableServer>> = _discoveryServers
+
+    private val _discoveryLoading  = MutableStateFlow(false)
+    val discoveryLoading: StateFlow<Boolean> = _discoveryLoading
+
+    private val _discoveryJoining  = MutableStateFlow<String?>(null)
+    val discoveryJoining: StateFlow<String?> = _discoveryJoining
+
+    private val _discoveryJoined   = MutableStateFlow<Set<String>>(emptySet())
+    val discoveryJoined: StateFlow<Set<String>> = _discoveryJoined
+
+    fun searchDiscovery(query: String, category: String) {
+        viewModelScope.launch {
+            _discoveryLoading.value = true
+            ApiClient.discoverServers(query, category)
+                .onSuccess { _discoveryServers.value = it }
+                .onFailure { _error.value = it.message }
+            _discoveryLoading.value = false
+        }
+    }
+
+    fun joinPublicServer(server: DiscoverableServer) {
+        if (_discoveryJoining.value != null) return
+        viewModelScope.launch {
+            _discoveryJoining.value = server.id
+            ApiClient.joinPublicServer(server.id)
+                .onSuccess { srv ->
+                    if (_servers.value.none { it.id == srv.id }) {
+                        _servers.value = _servers.value + srv
+                    }
+                    _discoveryJoined.value = _discoveryJoined.value + server.id
+                    SocketClient.joinServer(srv.id)
+                }
+                .onFailure { _error.value = it.message }
+            _discoveryJoining.value = null
+        }
+    }
 }

@@ -89,10 +89,17 @@ fun MainScreen(
 
             // ── Servers ──────────────────────────────────────────
             composable(BottomTab.Servers.route) {
-                ServersTabScreen(serversViewModel) { server ->
-                    serversViewModel.selectServer(server)
-                    navController.navigate("server_detail")
-                }
+                ServersTabScreen(
+                    serversViewModel = serversViewModel,
+                    onServerClick = { server ->
+                        serversViewModel.selectServer(server)
+                        navController.navigate("server_detail")
+                    },
+                    onDiscoverClick = { navController.navigate("server_discover") },
+                )
+            }
+            composable("server_discover") {
+                ServerDiscoveryScreen(serversViewModel) { navController.popBackStack() }
             }
             composable("server_detail") {
                 val server by serversViewModel.selectedServer.collectAsState()
@@ -169,7 +176,11 @@ fun MainScreen(
 // ──────────────────────────────────────────────
 
 @Composable
-fun ServersTabScreen(serversViewModel: ServersViewModel, onServerClick: (VoxaServer) -> Unit) {
+fun ServersTabScreen(
+    serversViewModel: ServersViewModel,
+    onServerClick: (VoxaServer) -> Unit,
+    onDiscoverClick: () -> Unit = {},
+) {
     val servers by serversViewModel.servers.collectAsState()
     val isLoading by serversViewModel.isLoading.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
@@ -178,6 +189,9 @@ fun ServersTabScreen(serversViewModel: ServersViewModel, onServerClick: (VoxaSer
     Column(modifier = Modifier.fillMaxSize().background(VoxaBg)) {
         TopBar(title = "Servers") {
             Row {
+                IconButton(onClick = onDiscoverClick) {
+                    Icon(Icons.Filled.Explore, "Discover", tint = VoxaTextMuted)
+                }
                 IconButton(onClick = { showJoin = true }) {
                     Icon(Icons.Filled.Link, "Join", tint = VoxaTextMuted)
                 }
@@ -436,4 +450,230 @@ fun JoinServerDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
         },
         containerColor = VoxaSurface,
     )
+}
+
+// ──────────────────────────────────────────────
+// Server Discovery
+// ──────────────────────────────────────────────
+
+@Composable
+fun ServerDiscoveryScreen(serversViewModel: ServersViewModel, onBack: () -> Unit) {
+    val allServers by serversViewModel.discoveryServers.collectAsState()
+    val loading    by serversViewModel.discoveryLoading.collectAsState()
+    val joining    by serversViewModel.discoveryJoining.collectAsState()
+    val joined     by serversViewModel.discoveryJoined.collectAsState()
+
+    var query    by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("all") }
+
+    val categories = listOf(
+        "all" to "🌐 All", "gaming" to "🎮 Gaming", "music" to "🎵 Music",
+        "art" to "🎨 Art", "tech" to "💻 Tech", "social" to "🤝 Social", "education" to "📚 Education",
+    )
+
+    LaunchedEffect(query, category) {
+        serversViewModel.searchDiscovery(query, category)
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(VoxaBg)) {
+        TopBar(title = "Discover Servers") {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, "Back", tint = VoxaTextMuted)
+            }
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search servers…", color = VoxaTextDim) },
+            leadingIcon = { Icon(Icons.Filled.Search, null, tint = VoxaTextMuted) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = VoxaRed, unfocusedBorderColor = VoxaSurfaceVar,
+                focusedTextColor = VoxaTextPrimary, unfocusedTextColor = VoxaTextPrimary,
+                focusedContainerColor = VoxaSurface, unfocusedContainerColor = VoxaSurface,
+                cursorColor = VoxaRed,
+            ),
+        )
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            items(categories) { (id, label) ->
+                FilterChip(
+                    selected = category == id,
+                    onClick = { category = id },
+                    label = { Text(label, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VoxaRed,
+                        selectedLabelColor = Color.White,
+                        containerColor = VoxaSurface,
+                        labelColor = VoxaTextMuted,
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = category == id,
+                        borderColor = VoxaSurfaceVar,
+                        selectedBorderColor = VoxaRed,
+                    ),
+                )
+            }
+        }
+
+        HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = VoxaRed)
+            }
+            allServers.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(Icons.Filled.Explore, null, tint = VoxaTextDim, modifier = Modifier.size(48.dp))
+                    Text(
+                        if (query.isEmpty()) "No public servers yet" else "No servers found",
+                        color = VoxaTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (query.isEmpty()) "Server owners can make their\nserver public in Server Settings."
+                        else "Try different keywords or clear the filter.",
+                        color = VoxaTextMuted, fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp),
+                    )
+                }
+            }
+            else -> LazyColumn(
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(allServers) { server ->
+                    DiscoveryServerCard(
+                        server = server,
+                        joining = joining == server.id,
+                        joined = joined.contains(server.id),
+                        onJoin = { serversViewModel.joinPublicServer(server) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DiscoveryServerCard(
+    server: DiscoverableServer,
+    joining: Boolean,
+    joined: Boolean,
+    onJoin: () -> Unit,
+) {
+    val accentColor = if (!server.iconColor.isNullOrEmpty()) {
+        val hex = server.iconColor.trimStart('#')
+        try { Color(("FF$hex").toLong(16)) } catch (_: NumberFormatException) { Color(avatarColorForName(server.name)) }
+    } else {
+        Color(avatarColorForName(server.name))
+    }
+    val displayRoles = server.roles.take(3)
+    val extraRoles   = (server.roles.size - 3).coerceAtLeast(0)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = VoxaSurface),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.07f)),
+    ) {
+        Column {
+            // Banner strip + server icon overlap
+            Box(modifier = Modifier.fillMaxWidth().height(76.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(accentColor.copy(alpha = 0.45f)),
+                )
+                // Icon overlapping banner bottom-left
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 12.dp)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(accentColor)
+                        .border(BorderStroke(2.5.dp, VoxaSurface), RoundedCornerShape(11.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(server.acronym.take(2), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                // Join button on banner top-right
+                Button(
+                    onClick = onJoin,
+                    enabled = !joining && !joined,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (joined) Color(0xFF23a55aL) else VoxaRed,
+                        disabledContainerColor = if (joined) Color(0x3323a55aL) else VoxaRed.copy(alpha = 0.5f),
+                    ),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    if (joining) {
+                        CircularProgressIndicator(Modifier.size(14.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text(if (joined) "✓ Joined" else "Join", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Card content
+            Column(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                Text(server.name, color = VoxaTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                if (!server.category.isNullOrEmpty()) {
+                    Text(
+                        server.category.replaceFirstChar { it.uppercase() },
+                        color = VoxaTextDim, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                server.description?.let {
+                    Spacer(Modifier.height(4.dp))
+                    Text(it, color = VoxaTextMuted, fontSize = 12.sp, maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                if (displayRoles.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        displayRoles.forEach { role ->
+                            val rHex = role.color?.trimStart('#') ?: "6B6E75"
+                            val rColor = try { Color(("FF$rHex").toLong(16)) } catch (_: NumberFormatException) { Color(0xFF6B6E75L) }
+                            Row(
+                                modifier = Modifier
+                                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(50))
+                                    .border(BorderStroke(0.5.dp, Color.White.copy(alpha = 0.08f)), RoundedCornerShape(50))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Box(Modifier.size(6.dp).clip(CircleShape).background(rColor))
+                                Text(role.name, color = VoxaTextMuted, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        if (extraRoles > 0) Text("+$extraRoles", color = VoxaTextDim, fontSize = 10.sp)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Filled.People, null, tint = VoxaTextDim, modifier = Modifier.size(12.dp))
+                    Text(
+                        "${server.memberCount} member${if (server.memberCount == 1) "" else "s"}",
+                        color = VoxaTextDim, fontSize = 11.sp,
+                    )
+                }
+            }
+        }
+    }
 }

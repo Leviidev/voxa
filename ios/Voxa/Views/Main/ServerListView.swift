@@ -4,6 +4,7 @@ struct ServerListView: View {
     @EnvironmentObject var servers: ServersViewModel
     @EnvironmentObject var auth: AuthViewModel
     @State private var showCreate = false
+    @State private var showDiscovery = false
 
     var body: some View {
         ZStack {
@@ -53,7 +54,7 @@ struct ServerListView: View {
                     }
                 }
 
-                // Add server
+                // Add / Discover
                 Capsule()
                     .fill(Color.white.opacity(0.1))
                     .frame(width: 28, height: 2)
@@ -65,6 +66,15 @@ struct ServerListView: View {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(Color(hex: "23a55a"))
+                    }
+                }
+
+                ServerPill(isSelected: false, action: { showDiscovery = true }) {
+                    ZStack {
+                        Color.white.opacity(0.06)
+                        Image(systemName: "safari")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(Color(hex: "6366F1"))
                     }
                 }
 
@@ -83,6 +93,9 @@ struct ServerListView: View {
         .frame(width: 68)
         .sheet(isPresented: $showCreate) {
             CreateServerSheet()
+        }
+        .sheet(isPresented: $showDiscovery) {
+            ServerDiscoverySheet()
         }
     }
 }
@@ -454,5 +467,312 @@ struct CreateChoiceRow: View {
             .overlay(RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.07), lineWidth: 1))
         }
+    }
+}
+
+// MARK: - Server Discovery Sheet
+
+struct ServerDiscoverySheet: View {
+    @EnvironmentObject var servers: ServersViewModel
+    @Environment(\.dismiss) var dismiss
+
+    @State private var query    = ""
+    @State private var category = "all"
+    @State private var results: [DiscoverableServer] = []
+    @State private var loading  = true
+    @State private var joining: String?       = nil
+    @State private var joined: Set<String>    = []
+
+    private let cats: [(id: String, emoji: String, label: String)] = [
+        ("all",       "🌐", "All"),
+        ("gaming",    "🎮", "Gaming"),
+        ("music",     "🎵", "Music"),
+        ("art",       "🎨", "Art"),
+        ("tech",      "💻", "Tech"),
+        ("social",    "🤝", "Social"),
+        ("education", "📚", "Education"),
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color(hex: "313338").ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // ── Search + category strip ──────────────────────
+                    VStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(Color(hex: "6B6E75"))
+                                .font(.system(size: 13))
+                            TextField("Search servers…", text: $query)
+                                .foregroundColor(Color(hex: "DBDEE1"))
+                                .font(.system(size: 14))
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(hex: "1E1F22"))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 7) {
+                                ForEach(cats, id: \.id) { cat in
+                                    Button(action: { category = cat.id }) {
+                                        HStack(spacing: 4) {
+                                            Text(cat.emoji).font(.system(size: 13))
+                                            Text(cat.label)
+                                                .font(.system(size: 12, weight: .semibold))
+                                        }
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 6)
+                                        .background(category == cat.id
+                                            ? Color(hex: "E53935")
+                                            : Color.white.opacity(0.06))
+                                        .foregroundColor(category == cat.id
+                                            ? .white
+                                            : Color(hex: "949BA4"))
+                                        .clipShape(Capsule())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Color(hex: "2B2D31"))
+
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 1)
+
+                    // ── Body ────────────────────────────────────────
+                    if loading {
+                        Spacer()
+                        ProgressView().tint(Color(hex: "6B6E75")).scaleEffect(1.2)
+                        Spacer()
+                    } else if results.isEmpty {
+                        discoveryEmpty
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            LazyVStack(spacing: 10) {
+                                ForEach(results) { srv in
+                                    DiscoverServerCard(
+                                        server: srv,
+                                        joining: joining == srv.id,
+                                        joined: joined.contains(srv.id),
+                                        onJoin: { joinServer(srv) }
+                                    )
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Discover Servers")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") { dismiss() }
+                        .foregroundColor(Color(hex: "E53935"))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if !loading {
+                        Text("\(results.count) server\(results.count == 1 ? "" : "s")")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "6B6E75"))
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onChange(of: query)    { _ in fetchResults() }
+        .onChange(of: category) { _ in fetchResults() }
+        .task { fetchResults() }
+    }
+
+    private var discoveryEmpty: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "safari")
+                .font(.system(size: 40))
+                .foregroundColor(Color(hex: "6B6E75"))
+            Text(query.isEmpty ? "No public servers yet" : "No servers found")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Color(hex: "DBDEE1"))
+            Text(query.isEmpty
+                ? "Server owners can make their server\npublic in Server Settings → Overview."
+                : "Try different keywords or a different category.")
+                .font(.system(size: 13))
+                .foregroundColor(Color(hex: "6B6E75"))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 36)
+            Spacer()
+        }
+    }
+
+    private func fetchResults() {
+        loading = true
+        Task {
+            do {
+                let data = try await APIClient.shared.discoverServers(query: query, category: category)
+                results = data
+            } catch {}
+            loading = false
+        }
+    }
+
+    private func joinServer(_ server: DiscoverableServer) {
+        guard joining == nil, !joined.contains(server.id) else { return }
+        joining = server.id
+        Task {
+            do {
+                let srv = try await APIClient.shared.joinPublicServer(id: server.id)
+                await servers.addServer(srv)
+                joined.insert(server.id)
+            } catch {}
+            joining = nil
+        }
+    }
+}
+
+// MARK: - Discover Server Card
+
+struct DiscoverServerCard: View {
+    let server: DiscoverableServer
+    let joining: Bool
+    let joined: Bool
+    let onJoin: () -> Void
+
+    private var displayRoles: [DiscoveryRole] { Array(server.roles.prefix(3)) }
+    private var extraRoles: Int { max(0, server.roles.count - 3) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // ── Banner + icon ────────────────────────────────────
+            ZStack(alignment: .bottomLeading) {
+                // Banner strip
+                if let url = server.bannerUrl.flatMap(URL.init) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: {
+                        server.accentColor.opacity(0.55)
+                    }
+                    .frame(height: 56).clipped()
+                } else {
+                    server.accentColor.opacity(0.45).frame(height: 56)
+                }
+
+                // Server icon overlapping banner bottom
+                ZStack {
+                    if let url = server.iconUrl.flatMap(URL.init) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            server.accentColor
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 11))
+                    } else {
+                        server.accentColor
+                        Text(server.acronym)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 11))
+                .overlay(RoundedRectangle(cornerRadius: 11)
+                    .stroke(Color(hex: "2B2D31"), lineWidth: 2.5))
+                .offset(x: 12, y: 20)
+            }
+
+            // ── Content ─────────────────────────────────────────
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(server.name)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(hex: "DBDEE1"))
+                        if let cat = server.category, !cat.isEmpty {
+                            Text(cat.prefix(1).uppercased() + cat.dropFirst())
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(hex: "6B6E75"))
+                        }
+                    }
+                    Spacer()
+                    // Join button
+                    Button(action: onJoin) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(joined
+                                    ? Color(hex: "23a55a").opacity(0.2)
+                                    : (joining ? Color(hex: "E53935").opacity(0.5) : Color(hex: "E53935")))
+                                .frame(width: 68, height: 30)
+                            if joining {
+                                ProgressView().scaleEffect(0.65).tint(.white)
+                            } else {
+                                Text(joined ? "✓ Joined" : "Join")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(joined ? Color(hex: "23a55a") : .white)
+                            }
+                        }
+                    }
+                    .disabled(joining || joined)
+                }
+                .padding(.top, 24)
+
+                if let desc = server.description {
+                    Text(desc)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: "949BA4"))
+                        .lineLimit(2)
+                }
+
+                // Role badges
+                if !displayRoles.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(Array(displayRoles.enumerated()), id: \.0) { _, role in
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(Color(hex: role.color?.replacingOccurrences(of: "#", with: "") ?? "6B6E75"))
+                                    .frame(width: 6, height: 6)
+                                Text(role.name)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Color(hex: "949BA4"))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.5))
+                        }
+                        if extraRoles > 0 {
+                            Text("+\(extraRoles)")
+                                .font(.system(size: 10))
+                                .foregroundColor(Color(hex: "6B6E75"))
+                        }
+                    }
+                }
+
+                // Member count
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: "6B6E75"))
+                    Text("\(server.memberCount) member\(server.memberCount == 1 ? "" : "s")")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "6B6E75"))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+        }
+        .background(Color(hex: "2B2D31"))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14)
+            .stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
 }
