@@ -238,4 +238,11 @@ export const api = {
     request(`/servers/${serverId}/emojis`, { method: 'POST', body: JSON.stringify({ name, imageUrl }) }),
   deleteServerEmoji: (serverId, emojiId) =>
     request(`/servers/${serverId}/emojis/${emojiId}`, { method: 'DELETE' }),
+
+  // Audit Log
+  getAuditLog: (serverId, { limit = 50, before } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (before) params.set('before', before)
+    return request(`/servers/${serverId}/audit-log?${params}`)
+  },
 }

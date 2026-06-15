@@ -17,6 +17,38 @@ function sanitize(str, max = 2000) {
   return String(str ?? '').replace(/<[^>]*>/g, '').trim().slice(0, max)
 }
 
+async function logAudit(serverId, actorId, action, { targetId = null, targetName = null, extra = null } = {}) {
+  const id = generateId('audit_')
+  await pool.query(
+    `INSERT INTO server_audit_log (id, server_id, action, actor_id, target_id, target_name, extra) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [id, serverId, action, actorId ?? null, targetId ?? null, targetName ?? null, extra ? JSON.stringify(extra) : null]
+  ).catch(() => {})
+}
+
+export async function getAuditLog(serverId, requesterId, { limit = 50, before = null } = {}) {
+  const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
+  if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
+  if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const params = [serverId, Math.min(parseInt(limit) || 50, 100)]
+  const beforeClause = before ? `AND a.created_at < $${params.push(before)}` : ''
+  const { rows } = await pool.query(
+    `SELECT a.*, u.username as actor_name, u.display_name as actor_display, u.avatar_url as actor_avatar, u.avatar_color as actor_color, u.discriminator as actor_disc
+     FROM server_audit_log a
+     LEFT JOIN users u ON u.id = a.actor_id
+     WHERE a.server_id = $1 ${beforeClause}
+     ORDER BY a.created_at DESC LIMIT $2`,
+    params
+  )
+  return rows.map(r => ({
+    id: r.id, action: r.action, createdAt: r.created_at,
+    targetId: r.target_id, targetName: r.target_name, extra: r.extra,
+    actor: r.actor_id ? {
+      id: r.actor_id, username: r.actor_name, displayName: r.actor_display,
+      avatarUrl: r.actor_avatar, avatarColor: r.actor_color, discriminator: r.actor_disc,
+    } : null,
+  }))
+}
+
 function nullIfEmpty(v) {
   return v === '' ? null : v ?? null
 }
@@ -401,8 +433,10 @@ export async function kickMember(serverId, requesterId, targetId) {
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   if (targetId === requesterId) throw Object.assign(new Error('Cannot kick yourself'), { status: 400 })
+  const { rows: [target] } = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [targetId])
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
   await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+  await logAudit(serverId, requesterId, 'member_kick', { targetId, targetName: target?.display_name || target?.username })
 }
 
 // ─── Roles ───────────────────────────────────────────────────────────────────
@@ -433,6 +467,7 @@ export async function createRole(serverId, requesterId, { name, color, hoist, pe
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW()) RETURNING *`,
     [id, serverId, sanitize(name, 64), color || null, Boolean(hoist), parseInt(count), perms, iconUrl || null]
   )
+  await logAudit(serverId, requesterId, 'role_create', { targetId: role.id, targetName: role.name })
   return { id: role.id, name: role.name, color: role.color, hoist: role.hoist, iconUrl: role.icon_url ?? null, position: role.position, permissions: role.permissions, isDefault: role.is_default }
 }
 
@@ -471,18 +506,21 @@ export async function deleteRole(serverId, requesterId, roleId) {
   if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
   if (role.is_default) throw Object.assign(new Error('Cannot delete @everyone'), { status: 400 })
   await pool.query('DELETE FROM roles WHERE id=$1', [roleId])
+  await logAudit(serverId, requesterId, 'role_delete', { targetId: roleId, targetName: role.name })
 }
 
 export async function assignRole(serverId, requesterId, targetUserId, roleId) {
   const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
-  const { rows: [role] } = await pool.query('SELECT id FROM roles WHERE id=$1 AND server_id=$2', [roleId, serverId])
+  const { rows: [role] } = await pool.query('SELECT id, name FROM roles WHERE id=$1 AND server_id=$2', [roleId, serverId])
   if (!role) throw Object.assign(new Error('Role not found'), { status: 404 })
+  const { rows: [target] } = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [targetUserId])
   await pool.query(
     'INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
     [serverId, targetUserId, roleId]
   )
+  await logAudit(serverId, requesterId, 'role_assign', { targetId: targetUserId, targetName: target?.display_name || target?.username, extra: { roleName: role.name, roleId } })
 }
 
 export async function removeRole(serverId, requesterId, targetUserId, roleId) {
@@ -491,7 +529,9 @@ export async function removeRole(serverId, requesterId, targetUserId, roleId) {
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   const { rows: [role] } = await pool.query('SELECT * FROM roles WHERE id=$1', [roleId])
   if (role?.is_default) throw Object.assign(new Error('Cannot remove @everyone'), { status: 400 })
+  const { rows: [target] } = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [targetUserId])
   await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2 AND role_id=$3', [serverId, targetUserId, roleId])
+  await logAudit(serverId, requesterId, 'role_remove', { targetId: targetUserId, targetName: target?.display_name || target?.username, extra: { roleName: role?.name, roleId } })
 }
 
 // ─── Channels ────────────────────────────────────────────────────────────────
@@ -1658,6 +1698,7 @@ export async function banMember(serverId, requesterId, targetId, reason = null) 
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
   if (targetId === requesterId) throw Object.assign(new Error('Cannot ban yourself'), { status: 400 })
   if (targetId === server.owner_id) throw Object.assign(new Error('Cannot ban the server owner'), { status: 400 })
+  const { rows: [target] } = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [targetId])
   await pool.query('DELETE FROM server_members WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
   await pool.query('DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
   await pool.query(
@@ -1665,13 +1706,16 @@ export async function banMember(serverId, requesterId, targetId, reason = null) 
      VALUES ($1,$2,$3,$4) ON CONFLICT (server_id, user_id) DO UPDATE SET reason=$4, banned_by=$3`,
     [serverId, targetId, requesterId, reason ?? null]
   )
+  await logAudit(serverId, requesterId, 'member_ban', { targetId, targetName: target?.display_name || target?.username, extra: reason ? { reason } : null })
 }
 
 export async function unbanMember(serverId, requesterId, targetId) {
   const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
+  const { rows: [target] } = await pool.query('SELECT username, display_name FROM users WHERE id=$1', [targetId])
   await pool.query('DELETE FROM server_bans WHERE server_id=$1 AND user_id=$2', [serverId, targetId])
+  await logAudit(serverId, requesterId, 'member_unban', { targetId, targetName: target?.display_name || target?.username })
 }
 
 export async function getBans(serverId, requesterId) {

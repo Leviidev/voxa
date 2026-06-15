@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, Hash, Volume2, Smile, Ban, UserCheck } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { X, Settings, Shield, Users, Link2, Trash2, Plus, Check, Copy, AlertTriangle, Edit3, Crown, Hash, Volume2, Smile, Ban, UserCheck, ScrollText, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useServers } from '../context/ServersContext.jsx'
@@ -35,6 +35,7 @@ const TABS = [
   { id: 'members', label: 'Members', icon: Users },
   { id: 'bans', label: 'Bans', icon: AlertTriangle },
   { id: 'emojis', label: 'Emojis', icon: Smile },
+  { id: 'audit-log', label: 'Audit Log', icon: ScrollText },
   { id: 'invites', label: 'Invites', icon: Link2 },
   { id: 'danger', label: 'Danger Zone', icon: Trash2, red: true },
 ]
@@ -104,6 +105,9 @@ export default function ServerSettingsModal({ server: initialServer, onClose }) 
             )}
             {tab === 'emojis' && (
               <EmojisTab server={server} isOwner={isOwner} />
+            )}
+            {tab === 'audit-log' && (
+              <AuditLogTab server={server} isOwner={isOwner} />
             )}
             {tab === 'invites' && (
               <InvitesTab server={server} />
@@ -1105,6 +1109,186 @@ function EmojisTab({ server, isOwner }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── Audit Log Tab ────────────────────────────────────────────────────────────
+const AUDIT_ACTIONS = {
+  member_kick:   { label: 'Member Kicked',      color: '#F59E0B', icon: '👢' },
+  member_ban:    { label: 'Member Banned',       color: '#E53935', icon: '🔨' },
+  member_unban:  { label: 'Member Unbanned',     color: '#10B981', icon: '✅' },
+  member_join:   { label: 'Member Joined',       color: '#3B82F6', icon: '📥' },
+  member_leave:  { label: 'Member Left',         color: '#6B6E75', icon: '📤' },
+  role_create:   { label: 'Role Created',        color: '#8B5CF6', icon: '🛡️' },
+  role_delete:   { label: 'Role Deleted',        color: '#E53935', icon: '🗑️' },
+  role_update:   { label: 'Role Updated',        color: '#8B5CF6', icon: '✏️' },
+  role_assign:   { label: 'Role Assigned',       color: '#6366F1', icon: '📎' },
+  role_remove:   { label: 'Role Removed',        color: '#6B6E75', icon: '📌' },
+  channel_create:{ label: 'Channel Created',     color: '#10B981', icon: '#️⃣' },
+  channel_delete:{ label: 'Channel Deleted',     color: '#E53935', icon: '#️⃣' },
+  server_update: { label: 'Server Updated',      color: '#3B82F6', icon: '⚙️' },
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d ago`
+  return new Date(dateStr).toLocaleDateString()
+}
+
+function AuditLogTab({ server, isOwner }) {
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all')
+
+  const LIMIT = 30
+
+  const load = useCallback(async (before = null) => {
+    if (!isOwner) { setLoading(false); return }
+    before ? setLoadingMore(true) : setLoading(true)
+    setError('')
+    try {
+      const data = await api.getAuditLog(server.id, { limit: LIMIT, before })
+      if (before) {
+        setEntries(prev => [...prev, ...data])
+      } else {
+        setEntries(data)
+      }
+      setHasMore(data.length === LIMIT)
+    } catch (err) { setError(err.message) }
+    finally { before ? setLoadingMore(false) : setLoading(false) }
+  }, [server.id, isOwner])
+
+  useEffect(() => { load() }, [load])
+
+  const filtered = filter === 'all' ? entries : entries.filter(e => e.action === filter)
+  const lastEntry = entries[entries.length - 1]
+
+  const AVATAR_COLORS = ['#E53935', '#6366F1', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6']
+  const getColor = (name) => AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
+
+  if (!isOwner) return (
+    <div className="px-6 py-10 text-center text-[#96989D] text-sm">Only the server owner can view the audit log.</div>
+  )
+
+  return (
+    <div className="px-6 py-5">
+      {error && <ErrBanner msg={error} onDismiss={() => setError('')} />}
+
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <select value={filter} onChange={e => setFilter(e.target.value)}
+            className="w-full appearance-none bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl pl-3 pr-8 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] cursor-pointer">
+            <option value="all">All actions</option>
+            <optgroup label="Members">
+              <option value="member_kick">Kicks</option>
+              <option value="member_ban">Bans</option>
+              <option value="member_unban">Unbans</option>
+            </optgroup>
+            <optgroup label="Roles">
+              <option value="role_create">Role Created</option>
+              <option value="role_delete">Role Deleted</option>
+              <option value="role_assign">Role Assigned</option>
+              <option value="role_remove">Role Removed</option>
+            </optgroup>
+            <optgroup label="Server">
+              <option value="channel_create">Channel Created</option>
+              <option value="channel_delete">Channel Deleted</option>
+              <option value="server_update">Server Updated</option>
+            </optgroup>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#96989D] pointer-events-none" />
+        </div>
+        <button onClick={() => load()} className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#E3E5E8] bg-[#F7F8FA] hover:bg-[#EAEBEE] transition-colors text-[#5C6068] shrink-0" title="Refresh">
+          <ScrollText size={15} />
+        </button>
+        <span className="text-xs text-[#96989D] shrink-0">{filtered.length} event{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {loading && (
+        <div className="flex justify-center py-10">
+          <div className="w-6 h-6 border-2 border-[#E53935] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {!loading && filtered.length === 0 && (
+        <div className="text-center py-12">
+          <ScrollText size={36} className="mx-auto text-[#96989D] mb-2 opacity-30" />
+          <p className="text-[#96989D] text-sm font-medium">No events yet</p>
+          <p className="text-[#C0C2C7] text-xs mt-1">Actions like kicks, bans, and role changes will appear here.</p>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {filtered.map((entry) => {
+          const meta = AUDIT_ACTIONS[entry.action] ?? { label: entry.action, color: '#96989D', icon: '❓' }
+          const actor = entry.actor
+          return (
+            <div key={entry.id} className="bg-[#F7F8FA] border border-[#E3E5E8] rounded-xl px-3 py-2.5 flex items-start gap-3">
+              {/* Actor avatar */}
+              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-white text-[10px] shrink-0 overflow-hidden mt-0.5"
+                style={{ background: actor?.avatarUrl ? undefined : (actor?.avatarColor ?? getColor(actor?.username)) }}>
+                {actor?.avatarUrl
+                  ? <img src={actor.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  : (actor?.displayName ?? actor?.username ?? '?')?.[0]?.toUpperCase()}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Action badge */}
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md text-white"
+                    style={{ background: meta.color }}>
+                    <span>{meta.icon}</span> {meta.label}
+                  </span>
+                  {/* Actor name */}
+                  <span className="text-xs font-semibold text-[#1A1B1E]">
+                    {actor?.displayName ?? actor?.username ?? 'Unknown'}
+                  </span>
+                  {/* Target */}
+                  {entry.targetName && (
+                    <>
+                      <span className="text-[#96989D] text-xs">→</span>
+                      <span className="text-xs text-[#5C6068] font-medium">{entry.targetName}</span>
+                    </>
+                  )}
+                </div>
+                {/* Extra info */}
+                {entry.extra && (
+                  <div className="mt-0.5 text-[10px] text-[#96989D] space-x-2">
+                    {entry.extra.reason && <span className="italic">"{entry.extra.reason}"</span>}
+                    {entry.extra.roleName && !entry.extra.reason && <span>Role: <strong>{entry.extra.roleName}</strong></span>}
+                    {entry.extra.changes && Object.keys(entry.extra.changes).map(k => (
+                      <span key={k}>{k} changed</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Timestamp */}
+              <span className="text-[10px] text-[#C0C2C7] shrink-0 mt-0.5 tabular-nums">{timeAgo(entry.createdAt)}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {hasMore && !loading && filter === 'all' && (
+        <div className="flex justify-center mt-3">
+          <button onClick={() => load(lastEntry?.createdAt)} disabled={loadingMore}
+            className="flex items-center gap-2 text-xs font-semibold text-[#5C6068] hover:text-[#1A1B1E] bg-[#F7F8FA] border border-[#E3E5E8] px-4 py-2 rounded-xl transition-colors disabled:opacity-50">
+            {loadingMore ? <><div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Loading…</> : <><ChevronDown size={13} /> Load more</>}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

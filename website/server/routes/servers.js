@@ -4,6 +4,7 @@ import {
   kickMember, getRoles, createRole, updateRole, deleteRole, assignRole, removeRole,
   createInvite, getServerInvites, deleteInvite, discoverServers, joinPublicServer,
   banMember, unbanMember, getBans, getServerEmojis, createServerEmoji, deleteServerEmoji,
+  getAuditLog,
 } from '../db.js'
 import { requireAuth } from '../middleware/auth.js'
 
@@ -138,6 +139,14 @@ router.post('/:id/emojis', async (req, res) => {
 router.delete('/:id/emojis/:emojiId', async (req, res) => {
   try { await deleteServerEmoji(req.params.id, req.user.id, req.params.emojiId); res.status(204).send() }
   catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
+})
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+router.get('/:id/audit-log', async (req, res) => {
+  try {
+    const { limit, before } = req.query
+    res.json(await getAuditLog(req.params.id, req.user.id, { limit, before }))
+  } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
