@@ -11,8 +11,8 @@ const router = Router()
 // ─── Discovery (public, no auth required) ─────────────────────────────────────
 router.get('/discover', async (req, res) => {
   try {
-    const { q = '', limit = '50', offset = '0' } = req.query
-    const servers = await discoverServers({ query: q, limit: parseInt(limit), offset: parseInt(offset) })
+    const { q = '', category = '', limit = '50', offset = '0' } = req.query
+    const servers = await discoverServers({ query: q, category, limit: parseInt(limit), offset: parseInt(offset) })
     res.json(servers)
   } catch (err) { res.status(err.status ?? 500).json({ error: err.message }) }
 })

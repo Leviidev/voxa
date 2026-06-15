@@ -259,6 +259,7 @@ export async function updateServer(serverId, userId, fields) {
   const colMap = {
     name: 'name', iconUrl: 'icon_url', iconColor: 'icon_color',
     description: 'description', bannerUrl: 'banner_url', bannerColor: 'banner_color',
+    category: 'category',
   }
   const setClauses = []
   const values = []
@@ -286,27 +287,45 @@ export async function updateServer(serverId, userId, fields) {
   return {
     id: updated.id, name: updated.name, iconUrl: updated.icon_url, iconColor: updated.icon_color,
     description: updated.description, bannerUrl: updated.banner_url, bannerColor: updated.banner_color,
+    category: updated.category ?? null,
     ownerId: updated.owner_id, createdAt: updated.created_at, isPublic: updated.is_public,
   }
 }
 
-export async function discoverServers({ query = '', limit = 50, offset = 0 } = {}) {
+export async function discoverServers({ query = '', category = '', limit = 50, offset = 0 } = {}) {
   const search = `%${query.toLowerCase()}%`
+  const params = [search, limit, offset]
+  let catClause = ''
+  if (category && category !== 'all') {
+    params.push(category)
+    catClause = `AND s.category = $${params.length}`
+  }
   const { rows } = await pool.query(
-    `SELECT s.id, s.name, s.icon_url, s.icon_color, s.description, s.banner_url, s.banner_color, s.is_public,
-            COUNT(sm.user_id)::int AS member_count
+    `SELECT s.id, s.name, s.icon_url, s.icon_color, s.description,
+            s.banner_url, s.banner_color, s.is_public, s.category,
+            COUNT(DISTINCT sm.user_id)::int AS member_count,
+            COALESCE(
+              (SELECT json_agg(json_build_object('name', r.name, 'color', r.color) ORDER BY r.pos)
+               FROM (SELECT name, color, position AS pos FROM roles
+                     WHERE server_id = s.id AND is_default = false
+                     ORDER BY position DESC LIMIT 6) r),
+              '[]'::json
+            ) AS roles
      FROM servers s
      LEFT JOIN server_members sm ON sm.server_id = s.id
-     WHERE s.is_public = true AND (lower(s.name) LIKE $1 OR lower(COALESCE(s.description,'')) LIKE $1)
+     WHERE s.is_public = true
+       AND (lower(s.name) LIKE $1 OR lower(COALESCE(s.description,'')) LIKE $1)
+       ${catClause}
      GROUP BY s.id
      ORDER BY member_count DESC, s.created_at DESC
      LIMIT $2 OFFSET $3`,
-    [search, limit, offset]
+    params
   )
   return rows.map(s => ({
     id: s.id, name: s.name, iconUrl: s.icon_url, iconColor: s.icon_color,
     description: s.description, bannerUrl: s.banner_url, bannerColor: s.banner_color,
-    isPublic: s.is_public, memberCount: s.member_count,
+    category: s.category ?? null, isPublic: s.is_public, memberCount: s.member_count,
+    roles: Array.isArray(s.roles) ? s.roles : [],
   }))
 }
 

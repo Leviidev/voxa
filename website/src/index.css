@@ -58,6 +58,8 @@ body {
 .landing-scroll::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
 
 .scrollable { overflow-y: auto; overflow-x: hidden; }
+.scrollable-x { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.scrollable-x::-webkit-scrollbar { display: none; }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(16px); }

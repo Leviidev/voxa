@@ -53,7 +53,11 @@ export const api = {
     request(`/servers/${id}`, { method: 'PATCH', body: JSON.stringify(fields) }),
   deleteServer: (id) => request(`/servers/${id}`, { method: 'DELETE' }),
   leaveServer: (id) => request(`/servers/${id}/leave`, { method: 'POST' }),
-  discoverServers: (q = '') => request(`/servers/discover?q=${encodeURIComponent(q)}`),
+  discoverServers: (q = '', category = '') => {
+    const params = new URLSearchParams({ q })
+    if (category && category !== 'all') params.set('category', category)
+    return request(`/servers/discover?${params}`)
+  },
   joinPublicServer: (id) => request(`/servers/${id}/join-public`, { method: 'POST' }),
 
   // Members

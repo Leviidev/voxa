@@ -111,6 +111,16 @@ export default function ServerSettingsModal({ server: initialServer, onClose }) 
 }
 
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
+const DISCOVERY_CATEGORIES = [
+  { id: '',          label: 'None (uncategorized)' },
+  { id: 'gaming',    label: '🎮 Gaming' },
+  { id: 'music',     label: '🎵 Music' },
+  { id: 'art',       label: '🎨 Art & Creative' },
+  { id: 'tech',      label: '💻 Tech' },
+  { id: 'social',    label: '🤝 Social' },
+  { id: 'education', label: '📚 Education' },
+]
+
 function OverviewTab({ server, isOwner, onUpdated }) {
   const [form, setForm] = useState({
     name: server?.name ?? '',
@@ -120,6 +130,7 @@ function OverviewTab({ server, isOwner, onUpdated }) {
     bannerColor: server?.bannerColor ?? '',
     bannerUrl: server?.bannerUrl ?? '',
     isPublic: server?.isPublic ?? false,
+    category: server?.category ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -182,6 +193,18 @@ function OverviewTab({ server, isOwner, onUpdated }) {
           placeholder="What's this server about?"
           className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D] resize-none transition-all disabled:opacity-60"
         />
+      </div>
+
+      <div>
+        <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Category</label>
+        <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          disabled={!isOwner}
+          className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all disabled:opacity-60 cursor-pointer">
+          {DISCOVERY_CATEGORIES.map(c => (
+            <option key={c.id} value={c.id}>{c.label}</option>
+          ))}
+        </select>
+        <p className="text-[#96989D] text-xs mt-1">Shown on the discovery page when your server is public</p>
       </div>
 
       {isOwner && (
