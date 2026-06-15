@@ -242,10 +242,18 @@ export async function getServerWithChannels(serverId, userId) {
     ownerId: server.owner_id,
     createdAt: server.created_at,
     isPublic: server.is_public ?? false,
+    category: server.category ?? null,
+    verificationLevel: server.verification_level ?? 'none',
+    defaultNotifications: server.default_notifications ?? 'all',
+    welcomeChannelId: server.welcome_channel_id ?? null,
+    systemChannelId: server.system_channel_id ?? null,
+    afkChannelId: server.afk_channel_id ?? null,
+    afkTimeout: server.afk_timeout ?? 300,
+    channels: channels.map(c => ({ id: c.id, name: c.name, type: c.type })),
     categories,
     members,
     roles: roles.map(r => ({
-      id: r.id, name: r.name, color: r.color, hoist: r.hoist,
+      id: r.id, name: r.name, color: r.color, hoist: r.hoist, iconUrl: r.icon_url ?? null,
       position: r.position, permissions: r.permissions, isDefault: r.is_default,
     })),
   }
@@ -259,7 +267,10 @@ export async function updateServer(serverId, userId, fields) {
   const colMap = {
     name: 'name', iconUrl: 'icon_url', iconColor: 'icon_color',
     description: 'description', bannerUrl: 'banner_url', bannerColor: 'banner_color',
-    category: 'category',
+    category: 'category', verificationLevel: 'verification_level',
+    defaultNotifications: 'default_notifications',
+    welcomeChannelId: 'welcome_channel_id', systemChannelId: 'system_channel_id',
+    afkChannelId: 'afk_channel_id',
   }
   const setClauses = []
   const values = []
@@ -267,7 +278,7 @@ export async function updateServer(serverId, userId, fields) {
 
   for (const [key, col] of Object.entries(colMap)) {
     if (!(key in fields)) continue
-    const val = fields[key] === '' ? null : sanitize(fields[key] ?? '', key === 'name' ? 100 : 300)
+    const val = fields[key] === '' ? null : sanitize(String(fields[key] ?? ''), key === 'name' ? 100 : 300)
     if (key === 'name' && !val?.trim()) throw Object.assign(new Error('Name cannot be empty'), { status: 400 })
     setClauses.push(`${col} = $${idx++}`)
     values.push(val)
@@ -276,6 +287,10 @@ export async function updateServer(serverId, userId, fields) {
   if ('isPublic' in fields) {
     setClauses.push(`is_public = $${idx++}`)
     values.push(Boolean(fields.isPublic))
+  }
+  if ('afkTimeout' in fields) {
+    setClauses.push(`afk_timeout = $${idx++}`)
+    values.push(parseInt(fields.afkTimeout) || 300)
   }
 
   if (!setClauses.length) return server
@@ -287,8 +302,14 @@ export async function updateServer(serverId, userId, fields) {
   return {
     id: updated.id, name: updated.name, iconUrl: updated.icon_url, iconColor: updated.icon_color,
     description: updated.description, bannerUrl: updated.banner_url, bannerColor: updated.banner_color,
-    category: updated.category ?? null,
-    ownerId: updated.owner_id, createdAt: updated.created_at, isPublic: updated.is_public,
+    category: updated.category ?? null, isPublic: updated.is_public,
+    verificationLevel: updated.verification_level ?? 'none',
+    defaultNotifications: updated.default_notifications ?? 'all',
+    welcomeChannelId: updated.welcome_channel_id ?? null,
+    systemChannelId: updated.system_channel_id ?? null,
+    afkChannelId: updated.afk_channel_id ?? null,
+    afkTimeout: updated.afk_timeout ?? 300,
+    ownerId: updated.owner_id, createdAt: updated.created_at,
   }
 }
 
@@ -394,12 +415,12 @@ const VALID_PERMISSIONS = [
 export async function getRoles(serverId) {
   const { rows } = await pool.query('SELECT * FROM roles WHERE server_id=$1 ORDER BY position', [serverId])
   return rows.map(r => ({
-    id: r.id, name: r.name, color: r.color, hoist: r.hoist,
+    id: r.id, name: r.name, color: r.color, hoist: r.hoist, iconUrl: r.icon_url ?? null,
     position: r.position, permissions: r.permissions, isDefault: r.is_default, createdAt: r.created_at,
   }))
 }
 
-export async function createRole(serverId, requesterId, { name, color, hoist, permissions }) {
+export async function createRole(serverId, requesterId, { name, color, hoist, permissions, iconUrl }) {
   const { rows: [server] } = await pool.query('SELECT * FROM servers WHERE id=$1', [serverId])
   if (!server) throw Object.assign(new Error('Server not found'), { status: 404 })
   if (server.owner_id !== requesterId) throw Object.assign(new Error('Forbidden'), { status: 403 })
@@ -408,11 +429,11 @@ export async function createRole(serverId, requesterId, { name, color, hoist, pe
   const id = generateId('role_')
   const perms = Array.isArray(permissions) ? permissions.filter(p => VALID_PERMISSIONS.includes(p)) : []
   const { rows: [role] } = await pool.query(
-    `INSERT INTO roles (id, server_id, name, color, hoist, position, permissions, is_default, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,false,NOW()) RETURNING *`,
-    [id, serverId, sanitize(name, 64), color || null, Boolean(hoist), parseInt(count), perms]
+    `INSERT INTO roles (id, server_id, name, color, hoist, position, permissions, icon_url, is_default, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW()) RETURNING *`,
+    [id, serverId, sanitize(name, 64), color || null, Boolean(hoist), parseInt(count), perms, iconUrl || null]
   )
-  return { id: role.id, name: role.name, color: role.color, hoist: role.hoist, position: role.position, permissions: role.permissions, isDefault: role.is_default }
+  return { id: role.id, name: role.name, color: role.color, hoist: role.hoist, iconUrl: role.icon_url ?? null, position: role.position, permissions: role.permissions, isDefault: role.is_default }
 }
 
 export async function updateRole(serverId, requesterId, roleId, fields) {
@@ -429,6 +450,7 @@ export async function updateRole(serverId, requesterId, roleId, fields) {
   if (fields.name) { setClauses.push(`name=$${idx++}`); values.push(sanitize(fields.name, 64)) }
   if (fields.color !== undefined) { setClauses.push(`color=$${idx++}`); values.push(fields.color || null) }
   if (fields.hoist !== undefined) { setClauses.push(`hoist=$${idx++}`); values.push(Boolean(fields.hoist)) }
+  if ('iconUrl' in fields) { setClauses.push(`icon_url=$${idx++}`); values.push(fields.iconUrl || null) }
   if (Array.isArray(fields.permissions)) {
     setClauses.push(`permissions=$${idx++}`)
     values.push(fields.permissions.filter(p => VALID_PERMISSIONS.includes(p)))
@@ -438,7 +460,7 @@ export async function updateRole(serverId, requesterId, roleId, fields) {
   const { rows: [updated] } = await pool.query(
     `UPDATE roles SET ${setClauses.join(', ')} WHERE id=$${idx} RETURNING *`, values
   )
-  return { id: updated.id, name: updated.name, color: updated.color, hoist: updated.hoist, position: updated.position, permissions: updated.permissions, isDefault: updated.is_default }
+  return { id: updated.id, name: updated.name, color: updated.color, hoist: updated.hoist, iconUrl: updated.icon_url ?? null, position: updated.position, permissions: updated.permissions, isDefault: updated.is_default }
 }
 
 export async function deleteRole(serverId, requesterId, roleId) {

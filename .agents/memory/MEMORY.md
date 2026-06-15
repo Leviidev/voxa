@@ -1,2 +1,3 @@
 - [Voxa stack](voxa-stack.md) — React+Vite (port 5000) + Express+Socket.io (port 3001) + PostgreSQL; custom JWT auth; Resend email optional.
-- [DB column additions](voxa-db-additions.md) — attachment fields added to messages/dm_messages, server_bans and server_emojis tables created, welcome_channel_id/system_channel_id added to servers.
+- [DB column additions](voxa-db-additions.md) — attachment fields added to messages/dm_messages, server_bans and server_emojis tables created; verification_level, default_notifications, welcome/system/afk_channel_id, afk_timeout added to servers; icon_url added to roles.
+- [Express trust proxy](voxa-trust-proxy.md) — must have app.set('trust proxy', 1) before rate limiters in index.js or express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR in Replit.

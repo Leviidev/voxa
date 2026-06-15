@@ -130,6 +130,7 @@ const DISCOVERY_CATEGORIES = [
 ]
 
 function OverviewTab({ server, isOwner, onUpdated }) {
+  const textChannels = (server?.channels ?? []).filter(c => c.type === 'text')
   const [form, setForm] = useState({
     name: server?.name ?? '',
     iconColor: server?.iconColor ?? '',
@@ -139,6 +140,12 @@ function OverviewTab({ server, isOwner, onUpdated }) {
     bannerUrl: server?.bannerUrl ?? '',
     isPublic: server?.isPublic ?? false,
     category: server?.category ?? '',
+    verificationLevel: server?.verificationLevel ?? 'none',
+    defaultNotifications: server?.defaultNotifications ?? 'all',
+    welcomeChannelId: server?.welcomeChannelId ?? '',
+    systemChannelId: server?.systemChannelId ?? '',
+    afkChannelId: server?.afkChannelId ?? '',
+    afkTimeout: server?.afkTimeout ?? 300,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -232,6 +239,86 @@ function OverviewTab({ server, isOwner, onUpdated }) {
         </div>
       )}
 
+      {/* ── System & Welcome channels ── */}
+      {isOwner && (
+        <div className="space-y-3 pt-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-[#96989D] border-t border-[#E3E5E8] pt-4">Channel Settings</div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Welcome Channel</label>
+            <select value={form.welcomeChannelId} onChange={e => setForm(f => ({ ...f, welcomeChannelId: e.target.value }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value="">None</option>
+              {textChannels.map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+            </select>
+            <p className="text-[#96989D] text-xs mt-1">Where new member welcome messages are posted</p>
+          </div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">System Messages Channel</label>
+            <select value={form.systemChannelId} onChange={e => setForm(f => ({ ...f, systemChannelId: e.target.value }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value="">None</option>
+              {textChannels.map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+            </select>
+            <p className="text-[#96989D] text-xs mt-1">Server boost and other system notifications</p>
+          </div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">AFK Channel</label>
+            <select value={form.afkChannelId} onChange={e => setForm(f => ({ ...f, afkChannelId: e.target.value }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value="">None</option>
+              {textChannels.map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">AFK Timeout</label>
+            <select value={form.afkTimeout} onChange={e => setForm(f => ({ ...f, afkTimeout: parseInt(e.target.value) }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value={60}>1 minute</option>
+              <option value={300}>5 minutes</option>
+              <option value={600}>10 minutes</option>
+              <option value={900}>15 minutes</option>
+              <option value={1800}>30 minutes</option>
+              <option value={3600}>1 hour</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* ── Moderation settings ── */}
+      {isOwner && (
+        <div className="space-y-3 pt-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-[#96989D] border-t border-[#E3E5E8] pt-4">Moderation</div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Verification Level</label>
+            <select value={form.verificationLevel} onChange={e => setForm(f => ({ ...f, verificationLevel: e.target.value }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value="none">None — No restrictions</option>
+              <option value="low">Low — Verified email required</option>
+              <option value="medium">Medium — Member for 5+ minutes</option>
+              <option value="high">High — Member for 10+ minutes</option>
+              <option value="very_high">Highest — Verified phone required</option>
+            </select>
+            <p className="text-[#96989D] text-xs mt-1">Who can send messages in this server</p>
+          </div>
+          <div>
+            <label className="block text-[#1A1B1E] text-xs font-bold uppercase tracking-wider mb-1.5">Default Notifications</label>
+            <select value={form.defaultNotifications} onChange={e => setForm(f => ({ ...f, defaultNotifications: e.target.value }))}
+              disabled={!isOwner}
+              className="w-full bg-[#F7F8FA] border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] transition-all cursor-pointer">
+              <option value="all">All Messages</option>
+              <option value="mentions">Only @mentions</option>
+              <option value="nothing">Nothing</option>
+            </select>
+            <p className="text-[#96989D] text-xs mt-1">Default notification setting for new members</p>
+          </div>
+        </div>
+      )}
+
       {isOwner && (
         <button onClick={save} disabled={saving}
           className="flex items-center gap-2 bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors">
@@ -247,7 +334,7 @@ function RolesTab({ server, isOwner, onRefresh }) {
   const [roles, setRoles] = useState(server?.roles ?? [])
   const [editing, setEditing] = useState(null)
   const [creating, setCreating] = useState(false)
-  const [newRole, setNewRole] = useState({ name: '', color: ROLE_COLORS[0], permissions: ['send_messages', 'read_messages'] })
+  const [newRole, setNewRole] = useState({ name: '', color: ROLE_COLORS[0], iconUrl: '', permissions: ['send_messages', 'read_messages'] })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -258,7 +345,7 @@ function RolesTab({ server, isOwner, onRefresh }) {
       const role = await api.createRole(server.id, newRole)
       setRoles(prev => [...prev, role])
       setCreating(false)
-      setNewRole({ name: '', color: ROLE_COLORS[0], permissions: ['send_messages', 'read_messages'] })
+      setNewRole({ name: '', color: ROLE_COLORS[0], iconUrl: '', permissions: ['send_messages', 'read_messages'] })
     } catch (err) { setError(err.message) }
     finally { setSaving(false) }
   }
@@ -322,6 +409,19 @@ function RolesTab({ server, isOwner, onRefresh }) {
               ))}
             </div>
           </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1.5">Role Icon URL <span className="normal-case font-normal opacity-60">(optional)</span></div>
+            <div className="flex items-center gap-2">
+              {newRole.iconUrl && (
+                <img src={newRole.iconUrl} alt="" className="w-7 h-7 rounded object-contain bg-[#EAEBEE] shrink-0"
+                  onError={e => e.target.style.display='none'} />
+              )}
+              <input value={newRole.iconUrl} onChange={e => setNewRole(r => ({ ...r, iconUrl: e.target.value }))}
+                placeholder="https://example.com/icon.png"
+                className="flex-1 bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+              />
+            </div>
+          </div>
           <PermissionsEditor permissions={newRole.permissions}
             onToggle={(perm) => togglePerm(newRole, setNewRole, perm)} />
           <button onClick={handleCreate} disabled={saving}
@@ -339,7 +439,11 @@ function RolesTab({ server, isOwner, onRefresh }) {
               'flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors',
               editing?.id === role.id ? 'bg-[#FFF5F5] border-[#FECDD3]' : 'bg-[#F7F8FA] border-[#E3E5E8] hover:bg-[#F2F3F5]'
             )}>
-              <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: role.color ?? '#96989D' }} />
+              {role.iconUrl
+                ? <img src={role.iconUrl} alt="" className="w-5 h-5 rounded object-contain shrink-0"
+                    onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block' }} />
+                : null}
+              <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: role.color ?? '#96989D', display: role.iconUrl ? 'none' : 'block' }} />
               <span className="flex-1 text-sm font-semibold text-[#1A1B1E] truncate">{role.name}</span>
               <span className="text-[#96989D] text-xs hidden sm:block">
                 {role.permissions?.length ?? 0} perm{role.permissions?.length !== 1 ? 's' : ''}
@@ -372,6 +476,25 @@ function RolesTab({ server, isOwner, onRefresh }) {
                         className={clsx('w-7 h-7 rounded-lg transition-all', editing.color === c ? 'ring-2 ring-[#1A1B1E] ring-offset-1 scale-110' : 'hover:scale-105')}
                         style={{ background: c }} />
                     ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#96989D] mb-1.5">Role Icon URL <span className="normal-case font-normal opacity-60">(optional)</span></div>
+                  <div className="flex items-center gap-2">
+                    {editing.iconUrl && (
+                      <img src={editing.iconUrl} alt="" className="w-7 h-7 rounded object-contain bg-[#EAEBEE] shrink-0"
+                        onError={e => e.target.style.display='none'} />
+                    )}
+                    <input value={editing.iconUrl ?? ''} onChange={e => setEditing(r => ({ ...r, iconUrl: e.target.value }))}
+                      placeholder="https://example.com/icon.png"
+                      className="flex-1 bg-white border border-[#E3E5E8] text-[#1A1B1E] rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#E53935]/20 focus:border-[#E53935] placeholder:text-[#96989D]"
+                    />
+                    {editing.iconUrl && (
+                      <button onClick={() => setEditing(r => ({ ...r, iconUrl: '' }))}
+                        className="text-[#96989D] hover:text-[#E53935] transition-colors shrink-0" title="Remove icon">
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <PermissionsEditor permissions={editing.permissions ?? []}
